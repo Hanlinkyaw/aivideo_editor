@@ -85,7 +85,7 @@
                 <div class="effects-section">
                     <h2>✨ Effects</h2>
                     
-                    <!-- Basic Effects -->
+                    <!-- Zoom Effect Card - ပြင်ဆင်ထားတဲ့အပိုင်း -->
                     <div class="effect-card">
                         <div class="effect-header">
                             <label class="checkbox-label">
@@ -94,6 +94,12 @@
                             </label>
                         </div>
                         <div class="effect-options" id="zoomOptions">
+                            <div class="option-row">
+                                <label>
+                                    <input type="checkbox" id="zoomTimed" checked>
+                                    <span>Timed Zoom (စက္ကန့်ပိုင်းအလိုက်)</span>
+                                </label>
+                            </div>
                             <div class="option-row">
                                 <label>Zoom Type:</label>
                                 <select id="zoomType">
@@ -105,9 +111,32 @@
                                 <label>Zoom Factor: <span id="zoomFactorValue">150%</span></label>
                                 <input type="range" id="zoomFactor" min="1.1" max="2.0" step="0.1" value="1.5">
                             </div>
+                            <div class="option-row">
+                                <label>Interval (စက္ကန့်):</label>
+                                <select id="zoomInterval">
+                                    <option value="3">၃ စက္ကန့် တစ်ခါ</option>
+                                    <option value="5">၅ စက္ကန့် တစ်ခါ</option>
+                                    <option value="7" selected>၇ စက္ကန့် တစ်ခါ</option>
+                                    <option value="10">၁၀ စက္ကန့် တစ်ခါ</option>
+                                    <option value="15">၁၅ စက္ကန့် တစ်ခါ</option>
+                                </select>
+                            </div>
+                            <div class="option-row">
+                                <label>Zoom Duration (စက္ကန့်):</label>
+                                <select id="zoomDuration">
+                                    <option value="1">၁ စက္ကန့်</option>
+                                    <option value="2" selected>၂ စက္ကန့်</option>
+                                    <option value="3">၃ စက္ကန့်</option>
+                                    <option value="4">၄ စက္ကန့်</option>
+                                </select>
+                            </div>
+                            <div class="option-row hint">
+                                <small>ဥပမာ - ၇ စက္ကန့်တစ်ခါ ၂ စက္ကန့်ကြာ Zoom လုပ်မယ်</small>
+                            </div>
                         </div>
                     </div>
                     
+                    <!-- Freeze Effect Card - ပြင်ဆင်ထားတဲ့အပိုင်း -->
                     <div class="effect-card">
                         <div class="effect-header">
                             <label class="checkbox-label">
@@ -117,17 +146,36 @@
                         </div>
                         <div class="effect-options" id="freezeOptions">
                             <div class="option-row">
+                                <label>
+                                    <input type="checkbox" id="freezeTimed" checked>
+                                    <span>Timed Freeze (စက္ကန့်ပိုင်းအလိုက်)</span>
+                                </label>
+                            </div>
+                            <div class="option-row">
                                 <label>Freeze Duration:</label>
                                 <select id="freezeDuration">
-                                    <option value="0.5">0.5 seconds</option>
-                                    <option value="1" selected>1 second</option>
-                                    <option value="1.5">1.5 seconds</option>
-                                    <option value="2">2 seconds</option>
+                                    <option value="0.5">၀.၅ စက္ကန့်</option>
+                                    <option value="1" selected>၁ စက္ကန့်</option>
+                                    <option value="1.5">၁.၅ စက္ကန့်</option>
+                                    <option value="2">၂ စက္ကန့်</option>
                                 </select>
+                            </div>
+                            <div class="option-row">
+                                <label>Interval (စက္ကန့်):</label>
+                                <select id="freezeInterval">
+                                    <option value="3">၃ စက္ကန့် တစ်ခါ</option>
+                                    <option value="5" selected>၅ စက္ကန့် တစ်ခါ</option>
+                                    <option value="7">၇ စက္ကန့် တစ်ခါ</option>
+                                    <option value="10">၁၀ စက္ကန့် တစ်ခါ</option>
+                                </select>
+                            </div>
+                            <div class="option-row hint">
+                                <small>ဥပမာ - ၅ စက္ကန့်တစ်ခါ ၁ စက္ကန့်ကြာ Freeze လုပ်မယ်</small>
                             </div>
                         </div>
                     </div>
                     
+                    <!-- Mirror Effect -->
                     <div class="effect-card">
                         <div class="effect-header">
                             <label class="checkbox-label">
@@ -146,6 +194,7 @@
                         </div>
                     </div>
                     
+                    <!-- Rotate Effect -->
                     <div class="effect-card">
                         <div class="effect-header">
                             <label class="checkbox-label">
@@ -165,7 +214,7 @@
                         </div>
                     </div>
                     
-                    <!-- Advanced Effects -->
+                    <!-- Blur Effect -->
                     <div class="effect-card">
                         <div class="effect-header">
                             <label class="checkbox-label">
@@ -182,6 +231,7 @@
                         </div>
                     </div>
                     
+                    <!-- Glitch Effect -->
                     <div class="effect-card">
                         <div class="effect-header">
                             <label class="checkbox-label">
@@ -198,6 +248,7 @@
                         </div>
                     </div>
                     
+                    <!-- Old Film Effect -->
                     <div class="effect-card">
                         <div class="effect-header">
                             <label class="checkbox-label">
@@ -214,6 +265,7 @@
                         </div>
                     </div>
                     
+                    <!-- Speed Effect -->
                     <div class="effect-card">
                         <div class="effect-header">
                             <label class="checkbox-label">

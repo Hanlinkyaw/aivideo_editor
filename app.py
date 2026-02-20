@@ -48,6 +48,7 @@ app = Flask(__name__)
 # Configuration
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
 app.config['OUTPUT_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'outputs')
+app.config['PREVIEW_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'previews')
 app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB max
 app.config['ALLOWED_EXTENSIONS'] = {'mp4', 'avi', 'mov', 'mkv', 'flv', 'wmv'}
 app.config['SECRET_KEY'] = 'video-editor-secret-key-change-this-in-production'
@@ -55,6 +56,7 @@ app.config['SECRET_KEY'] = 'video-editor-secret-key-change-this-in-production'
 # Create folders if not exist
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['OUTPUT_FOLDER'], exist_ok=True)
+os.makedirs(app.config['PREVIEW_FOLDER'], exist_ok=True)
 
 # ==================== DATABASE SETUP ====================
 def init_db():
@@ -103,7 +105,7 @@ def allowed_file(filename):
 # ==================== EFFECT FUNCTIONS ====================
 
 def zoom_effect(clip, zoom_factor=1.5, zoom_type='in'):
-    """Zoom In/Out Effect"""
+    """Original Zoom In/Out Effect"""
     def fl(im):
         h, w = im.shape[:2]
         if zoom_type == 'in':
@@ -125,8 +127,60 @@ def zoom_effect(clip, zoom_factor=1.5, zoom_type='in'):
             return zoomed
     return clip.fl_image(fl)
 
+def zoom_effect_timed(clip, zoom_factor=1.5, zoom_type='in', interval=7, zoom_duration=2):
+    """
+    New: Zoom In/Out Effect with timed intervals 
+    - interval: ဘယ်နှစ်စက္ကန့်တစ်ခါ လုပ်မလဲ (ဥပမာ ၇ စက္ကန့်)
+    - zoom_duration: zoom လုပ်တဲ့ကြာချိန် (ဥပမာ ၂ စက္ကန့်)
+    """
+    def make_frame(t):
+        # Calculate which cycle we're in
+        cycle_time = t % interval
+        
+        if cycle_time < zoom_duration:
+            # Zoom phase
+            progress = cycle_time / zoom_duration
+            
+            if zoom_type == 'in':
+                # Zoom in gradually
+                current_zoom = 1.0 + (zoom_factor - 1.0) * progress
+            else:
+                # Zoom out gradually
+                current_zoom = 1.0 + (zoom_factor - 1.0) * (1 - progress)
+        else:
+            # Normal phase (no zoom)
+            current_zoom = 1.0
+        
+        # Get frame at time t
+        frame = clip.get_frame(t)
+        h, w = frame.shape[:2]
+        
+        if current_zoom > 1:
+            # Zoom in (crop and resize)
+            new_h, new_w = int(h / current_zoom), int(w / current_zoom)
+            y_start = (h - new_h) // 2
+            x_start = (w - new_w) // 2
+            cropped = frame[y_start:y_start+new_h, x_start:x_start+new_w]
+            pil_img = Image.fromarray(cropped)
+            zoomed = np.array(pil_img.resize((w, h), Image.Resampling.LANCZOS))
+            return zoomed
+        elif current_zoom < 1:
+            # Zoom out (shrink and pad)
+            new_h, new_w = int(h * current_zoom), int(w * current_zoom)
+            pil_img = Image.fromarray(frame)
+            shrunk = np.array(pil_img.resize((new_w, new_h), Image.Resampling.LANCZOS))
+            zoomed = np.zeros((h, w, 3), dtype=np.uint8)
+            y_start = (h - new_h) // 2
+            x_start = (w - new_w) // 2
+            zoomed[y_start:y_start+new_h, x_start:x_start+new_w] = shrunk
+            return zoomed
+        else:
+            return frame
+    
+    return clip.fl(make_frame)
+
 def freeze_effect(clip, freeze_duration=1):
-    """Freeze last frame"""
+    """Original Freeze Effect (freeze at the end)"""
     if clip.duration <= freeze_duration:
         return clip
     freeze_time = clip.duration - freeze_duration
@@ -134,6 +188,27 @@ def freeze_effect(clip, freeze_duration=1):
     freeze_frame = freeze_frame.set_duration(freeze_duration)
     main_part = clip.subclip(0, freeze_time)
     return CompositeVideoClip([main_part, freeze_frame.set_start(main_part.duration)])
+
+def freeze_effect_timed(clip, freeze_duration=1, interval=5):
+    """
+    New: Freeze effect with timed intervals 
+    - interval: ဘယ်နှစ်စက္ကန့်တစ်ခါ freeze လုပ်မလဲ
+    - freeze_duration: freeze လုပ်တဲ့ကြာချိန်
+    """
+    def make_frame(t):
+        # Calculate which segment we're in
+        segment = int(t // interval)
+        segment_start = segment * interval
+        segment_end = (segment + 1) * interval
+        freeze_start = segment_end - freeze_duration
+        
+        if t >= freeze_start and t < segment_end:
+            # Freeze phase
+            return clip.get_frame(freeze_start)
+        else:
+            return clip.get_frame(t)
+    
+    return clip.fl(make_frame)
 
 def mirror_effect(clip, mirror_type='horizontal'):
     """Mirror effect"""
@@ -363,15 +438,35 @@ def process_video_task(job_id, input_path, options, user_id):
                 
                 segment = video.subclip(start, actual_end)
                 
-                # Apply effects
+                # Apply effects with new timed options
                 if options.get('zoom_enabled') == 'on':
-                    segment = zoom_effect(segment, 
-                        float(options.get('zoom_factor', 1.5)),
-                        options.get('zoom_type', 'in'))
+                    if options.get('zoom_timed') == 'on':
+                        # Use timed zoom (every X seconds)
+                        zoom_interval = int(options.get('zoom_interval', 7))
+                        zoom_duration = int(options.get('zoom_duration', 2))
+                        segment = zoom_effect_timed(segment, 
+                            float(options.get('zoom_factor', 1.5)),
+                            options.get('zoom_type', 'in'),
+                            zoom_interval,
+                            zoom_duration)
+                    else:
+                        # Use original zoom
+                        segment = zoom_effect(segment, 
+                            float(options.get('zoom_factor', 1.5)),
+                            options.get('zoom_type', 'in'))
                 
                 if options.get('freeze_enabled') == 'on':
-                    segment = freeze_effect(segment,
-                        float(options.get('freeze_duration', 1)))
+                    if options.get('freeze_timed') == 'on':
+                        # Use timed freeze (every X seconds)
+                        freeze_interval = int(options.get('freeze_interval', 5))
+                        freeze_duration = float(options.get('freeze_duration', 1))
+                        segment = freeze_effect_timed(segment,
+                            freeze_duration,
+                            freeze_interval)
+                    else:
+                        # Use original freeze (at the end)
+                        segment = freeze_effect(segment,
+                            float(options.get('freeze_duration', 1)))
                 
                 if options.get('mirror_enabled') == 'on':
                     segment = mirror_effect(segment,
@@ -390,7 +485,8 @@ def process_video_task(job_id, input_path, options, user_id):
                         float(options.get('glitch_intensity', 0.1)))
                 
                 if options.get('oldfilm_enabled') == 'on':
-                    segment = old_film_effect(segment)
+                    segment = old_film_effect(segment,
+                        float(options.get('scratch_intensity', 0.1)))
                 
                 if options.get('speed_enabled') == 'on':
                     segment = speed_effect(segment,
@@ -467,6 +563,25 @@ def process_video_task(job_id, input_path, options, user_id):
             logger='bar'
         )
         
+        # Create preview (first 30 seconds, lower quality)
+        preview_filename = f"{job_id}_preview.mp4"
+        preview_path = os.path.join(app.config['PREVIEW_FOLDER'], preview_filename)
+        
+        preview_duration = min(30, final_video.duration)
+        preview_clip = final_video.subclip(0, preview_duration)
+        preview_clip.write_videofile(
+            preview_path,
+            codec='libx264',
+            bitrate='1000k',
+            preset='fast',
+            audio_codec='aac',
+            temp_audiofile='temp-audio.m4a',
+            remove_temp=True,
+            verbose=False,
+            logger='bar'
+        )
+        preview_clip.close()
+        
         video.close()
         final_video.close()
         for seg in segments:
@@ -475,14 +590,7 @@ def process_video_task(job_id, input_path, options, user_id):
         active_jobs[job_id]['status'] = 'completed'
         active_jobs[job_id]['progress'] = 100
         active_jobs[job_id]['output_path'] = output_path
-        
-        # Save to database
-        conn = sqlite3.connect('users.db')
-        c = conn.cursor()
-        c.execute("INSERT INTO users (id, filename, status) VALUES (?, ?, ?)",
-                 (job_id, os.path.basename(input_path), 'completed'))
-        conn.commit()
-        conn.close()
+        active_jobs[job_id]['preview_path'] = preview_path
         
     except Exception as e:
         logger.error(f"Error: {e}")
@@ -570,10 +678,15 @@ def upload():
         'remove_time': request.form.get('remove_time', '1'),
         'output_quality': request.form.get('output_quality', '1080p'),
         'zoom_enabled': request.form.get('zoom_enabled', 'off'),
+        'zoom_timed': request.form.get('zoom_timed', 'off'),
         'zoom_factor': request.form.get('zoom_factor', '1.5'),
         'zoom_type': request.form.get('zoom_type', 'in'),
+        'zoom_interval': request.form.get('zoom_interval', '7'),
+        'zoom_duration': request.form.get('zoom_duration', '2'),
         'freeze_enabled': request.form.get('freeze_enabled', 'off'),
+        'freeze_timed': request.form.get('freeze_timed', 'off'),
         'freeze_duration': request.form.get('freeze_duration', '1'),
+        'freeze_interval': request.form.get('freeze_interval', '5'),
         'mirror_enabled': request.form.get('mirror_enabled', 'off'),
         'mirror_type': request.form.get('mirror_type', 'horizontal'),
         'rotate_enabled': request.form.get('rotate_enabled', 'off'),
@@ -583,6 +696,7 @@ def upload():
         'glitch_enabled': request.form.get('glitch_enabled', 'off'),
         'glitch_intensity': request.form.get('glitch_intensity', '0.1'),
         'oldfilm_enabled': request.form.get('oldfilm_enabled', 'off'),
+        'scratch_intensity': request.form.get('scratch_intensity', '0.1'),
         'speed_enabled': request.form.get('speed_enabled', 'off'),
         'speed_factor': request.form.get('speed_factor', '1.5'),
         'speed_type': request.form.get('speed_type', 'fast'),
@@ -592,7 +706,8 @@ def upload():
         'text_size': request.form.get('text_size', '40'),
         'text_color': request.form.get('text_color', 'white'),
         'text_position': request.form.get('text_position', 'center'),
-        'transition_type': request.form.get('transition_type', 'none'),
+        'transition_enabled': request.form.get('transition_enabled', 'off'),
+        'transition_type': request.form.get('transition_type', 'fade'),
         'transition_duration': request.form.get('transition_duration', '1'),
         'music_enabled': request.form.get('music_enabled', 'off'),
         'music_path': request.form.get('music_path', ''),
@@ -625,6 +740,7 @@ def status(job_id):
         resp = {'status': job['status'], 'progress': job['progress']}
         if job['status'] == 'completed':
             resp['output_url'] = f"/download/{job_id}"
+            resp['preview_url'] = f"/preview/{job_id}"
         elif job['status'] == 'error':
             resp['error'] = job.get('error')
         return jsonify(resp)
@@ -636,6 +752,15 @@ def download(job_id):
     if job_id in active_jobs and active_jobs[job_id]['status'] == 'completed':
         return send_file(active_jobs[job_id]['output_path'], as_attachment=True)
     return jsonify({'error': 'Not ready'}), 404
+
+@app.route('/preview/<job_id>')
+@login_required
+def preview(job_id):
+    if job_id in active_jobs and active_jobs[job_id]['status'] == 'completed':
+        preview_path = active_jobs[job_id].get('preview_path')
+        if preview_path and os.path.exists(preview_path):
+            return send_file(preview_path)
+    return jsonify({'error': 'Preview not available'}), 404
 
 @app.route('/jobs')
 @login_required
@@ -661,6 +786,7 @@ if __name__ == '__main__':
     print("="*60)
     print(f"📁 Upload folder: {app.config['UPLOAD_FOLDER']}")
     print(f"📁 Output folder: {app.config['OUTPUT_FOLDER']}")
+    print(f"📁 Preview folder: {app.config['PREVIEW_FOLDER']}")
     print(f"🌐 URL: http://localhost:5555")
     print("="*60 + "\n")
     

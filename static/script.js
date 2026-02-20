@@ -84,7 +84,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // ========== EFFECT TOGGLES ==========
     
-    // Toggle effect options
+    // Toggle effect options when clicking on header
     document.querySelectorAll('.effect-header').forEach(header => {
         header.addEventListener('click', function(e) {
             // Don't toggle if clicking on checkbox
@@ -97,7 +97,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Checkbox handlers
+    // Zoom enabled checkbox
     const zoomEnabled = document.getElementById('zoomEnabled');
     if (zoomEnabled) {
         zoomEnabled.addEventListener('change', function() {
@@ -106,6 +106,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // Freeze enabled checkbox
     const freezeEnabled = document.getElementById('freezeEnabled');
     if (freezeEnabled) {
         freezeEnabled.addEventListener('change', function() {
@@ -114,6 +115,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // Mirror enabled checkbox
     const mirrorEnabled = document.getElementById('mirrorEnabled');
     if (mirrorEnabled) {
         mirrorEnabled.addEventListener('change', function() {
@@ -122,6 +124,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // Rotate enabled checkbox
     const rotateEnabled = document.getElementById('rotateEnabled');
     if (rotateEnabled) {
         rotateEnabled.addEventListener('change', function() {
@@ -130,6 +133,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // Blur enabled checkbox
     const blurEnabled = document.getElementById('blurEnabled');
     if (blurEnabled) {
         blurEnabled.addEventListener('change', function() {
@@ -138,6 +142,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // Glitch enabled checkbox
     const glitchEnabled = document.getElementById('glitchEnabled');
     if (glitchEnabled) {
         glitchEnabled.addEventListener('change', function() {
@@ -146,6 +151,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // Old film enabled checkbox
     const oldfilmEnabled = document.getElementById('oldfilmEnabled');
     if (oldfilmEnabled) {
         oldfilmEnabled.addEventListener('change', function() {
@@ -154,6 +160,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // Speed enabled checkbox
     const speedEnabled = document.getElementById('speedEnabled');
     if (speedEnabled) {
         speedEnabled.addEventListener('change', function() {
@@ -162,6 +169,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // Noise reduction checkbox
     const noiseReduction = document.getElementById('noiseReduction');
     if (noiseReduction) {
         noiseReduction.addEventListener('change', function() {
@@ -170,6 +178,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // Text enabled checkbox
     const textEnabled = document.getElementById('textEnabled');
     if (textEnabled) {
         textEnabled.addEventListener('change', function() {
@@ -178,6 +187,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // Transition enabled checkbox
     const transitionEnabled = document.getElementById('transitionEnabled');
     if (transitionEnabled) {
         transitionEnabled.addEventListener('change', function() {
@@ -186,6 +196,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // Music enabled checkbox
     const musicEnabled = document.getElementById('musicEnabled');
     if (musicEnabled) {
         musicEnabled.addEventListener('change', function() {
@@ -377,36 +388,50 @@ async function uploadVideo() {
     formData.append('remove_time', getValue('removeTime', '1'));
     formData.append('output_quality', getValue('outputQuality', '1080p'));
     
-    // Effects
+    // Zoom effect options
     formData.append('zoom_enabled', getChecked('zoomEnabled') ? 'on' : 'off');
+    formData.append('zoom_timed', getChecked('zoomTimed') ? 'on' : 'off');
     formData.append('zoom_factor', getRangeValue('zoomFactor', '1.5'));
     formData.append('zoom_type', getValue('zoomType', 'in'));
+    formData.append('zoom_interval', getValue('zoomInterval', '7'));
+    formData.append('zoom_duration', getValue('zoomDuration', '2'));
     
+    // Freeze effect options
     formData.append('freeze_enabled', getChecked('freezeEnabled') ? 'on' : 'off');
+    formData.append('freeze_timed', getChecked('freezeTimed') ? 'on' : 'off');
     formData.append('freeze_duration', getValue('freezeDuration', '1'));
+    formData.append('freeze_interval', getValue('freezeInterval', '5'));
     
+    // Mirror effect
     formData.append('mirror_enabled', getChecked('mirrorEnabled') ? 'on' : 'off');
     formData.append('mirror_type', getValue('mirrorType', 'horizontal'));
     
+    // Rotate effect
     formData.append('rotate_enabled', getChecked('rotateEnabled') ? 'on' : 'off');
     formData.append('rotate_angle', getValue('rotateAngle', '90'));
     
+    // Blur effect
     formData.append('blur_enabled', getChecked('blurEnabled') ? 'on' : 'off');
     formData.append('blur_radius', getRangeValue('blurRadius', '5'));
     
+    // Glitch effect
     formData.append('glitch_enabled', getChecked('glitchEnabled') ? 'on' : 'off');
     formData.append('glitch_intensity', getRangeValue('glitchIntensity', '0.1'));
     
+    // Old film effect
     formData.append('oldfilm_enabled', getChecked('oldfilmEnabled') ? 'on' : 'off');
+    formData.append('scratch_intensity', getRangeValue('scratchIntensity', '0.1'));
     
+    // Speed effect
     formData.append('speed_enabled', getChecked('speedEnabled') ? 'on' : 'off');
     formData.append('speed_factor', getRangeValue('speedFactor', '1.5'));
     formData.append('speed_type', getValue('speedType', 'fast'));
     
+    // Noise reduction
     formData.append('noise_reduction', getChecked('noiseReduction') ? 'on' : 'off');
     formData.append('noise_strength', getRangeValue('noiseStrength', '0.5'));
     
-    // Text
+    // Text effect
     formData.append('text_enabled', getChecked('textEnabled') ? 'on' : 'off');
     formData.append('text_content', getValue('textContent', ''));
     formData.append('text_position', getValue('textPosition', 'center'));
@@ -518,8 +543,14 @@ function startStatusCheck(jobId) {
                 document.getElementById('closeModalBtn').classList.remove('hidden');
                 loadJobs();
                 
-                // Auto download prompt
-                if (data.output_url) {
+                // Show preview and download options
+                if (data.preview_url) {
+                    setTimeout(() => {
+                        if (confirm('Video completed! Would you like to preview it?')) {
+                            window.open(data.preview_url, '_blank');
+                        }
+                    }, 500);
+                } else if (data.output_url) {
                     setTimeout(() => {
                         if (confirm('Download edited video?')) {
                             window.location.href = data.output_url;
