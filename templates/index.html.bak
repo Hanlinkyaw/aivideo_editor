@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Video Editor - Complete Edition</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Navbar -->
+        <div class="navbar">
+            <div class="nav-brand">🎬 AI Video Editor Pro</div>
+            <div class="nav-user" id="navUser"></div>
+        </div>
+        
+        <h1>AI Video Editor</h1>
+        <p class="subtitle">Professional video editing with AI-powered effects</p>
+        
+        <div class="main-content">
+            <!-- Left Panel - Upload & Settings -->
+            <div class="left-panel">
+                <div class="upload-section">
+                    <h2>📁 Upload Video</h2>
+                    <div class="upload-area" id="uploadArea">
+                        <input type="file" id="videoInput" accept="video/*" hidden>
+                        <div class="upload-content">
+                            <span class="upload-icon">📹</span>
+                            <p>Click or drag video to upload</p>
+                            <p class="small">MP4, AVI, MOV, MKV (Max 500MB)</p>
+                        </div>
+                    </div>
+                    <div id="fileInfo" class="file-info hidden">
+                        <p><strong>Selected:</strong> <span id="fileName"></span></p>
+                        <p><strong>Size:</strong> <span id="fileSize"></span></p>
+                    </div>
+                </div>
+                
+                <div class="settings-section">
+                    <h2>⚙️ Timeline Settings</h2>
+                    
+                    <div class="setting-group">
+                        <label for="splitTime">Split Every (seconds):</label>
+                        <select id="splitTime" class="form-control">
+                            <option value="3">3 seconds</option>
+                            <option value="4">4 seconds</option>
+                            <option value="5">5 seconds</option>
+                            <option value="6" selected>6 seconds</option>
+                            <option value="7">7 seconds</option>
+                            <option value="8">8 seconds</option>
+                            <option value="9">9 seconds</option>
+                            <option value="10">10 seconds</option>
+                            <option value="15">15 seconds</option>
+                            <option value="20">20 seconds</option>
+                            <option value="30">30 seconds</option>
+                            <option value="60">60 seconds</option>
+                        </select>
+                    </div>
+                    
+                    <div class="setting-group">
+                        <label for="removeTime">Remove Last (seconds):</label>
+                        <select id="removeTime" class="form-control">
+                            <option value="0.5">0.5 seconds</option>
+                            <option value="1" selected>1 second</option>
+                            <option value="1.5">1.5 seconds</option>
+                            <option value="2">2 seconds</option>
+                            <option value="2.5">2.5 seconds</option>
+                            <option value="3">3 seconds</option>
+                        </select>
+                    </div>
+                    
+                    <div class="setting-group">
+                        <label for="outputQuality">Output Quality:</label>
+                        <select id="outputQuality" class="form-control">
+                            <option value="720p">720p (HD)</option>
+                            <option value="1080p" selected>1080p (Full HD)</option>
+                            <option value="4k">4K (Ultra HD)</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="effects-section">
+                    <h2>✨ Effects</h2>
+                    
+                    <!-- Basic Effects -->
+                    <div class="effect-card">
+                        <div class="effect-header">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="zoomEnabled" checked>
+                                <span>🔍 Zoom Effect</span>
+                            </label>
+                        </div>
+                        <div class="effect-options" id="zoomOptions">
+                            <div class="option-row">
+                                <label>Zoom Type:</label>
+                                <select id="zoomType">
+                                    <option value="in">Zoom In</option

@@ -1,0 +1,356 @@
+// Global variables
+let currentJobId = null;
+let statusInterval = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('✅ DOM loaded - Initializing...');
+    
+    // Get elements
+    const uploadArea = document.getElementById('uploadArea');
+    const videoInput = document.getElementById('videoInput');
+    const fileInfo = document.getElementById('fileInfo');
+    const fileName = document.getElementById('fileName');
+    const fileSize = document.getElementById('fileSize');
+    const processBtn = document.getElementById('processBtn');
+    
+    // Check if elements exist
+    if (!uploadArea || !videoInput) {
+        console.error('Required elements not found!');
+        return;
+    }
+    
+    // Click to upload
+    uploadArea.addEventListener('click', () => {
+        console.log('Upload area clicked');
+        videoInput.click();
+    });
+    
+    // Drag and drop
+    uploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadArea.classList.add('dragover');
+    });
+    
+    uploadArea.addEventListener('dragleave', () => {
+        uploadArea.classList.remove('dragover');
+    });
+    
+    uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadArea.classList.remove('dragover');
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            console.log('File dropped:', files[0].name);
+            videoInput.files = files;
+            handleFileSelect(files[0]);
+        }
+    });
+    
+    // File input change
+    videoInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+            console.log('File selected:', e.target.files[0].name);
+            handleFileSelect(e.target.files[0]);
+        }
+    });
+    
+    // Handle file selection
+    function handleFileSelect(file) {
+        if (file.type.startsWith('video/')) {
+            if (fileInfo) fileInfo.classList.remove('hidden');
+            if (fileName) fileName.textContent = file.name;
+            if (fileSize) fileSize.textContent = formatFileSize(file.size);
+            if (processBtn) processBtn.disabled = false;
+            console.log('File accepted:', file.name);
+        } else {
+            alert('Please select a video file');
+            console.log('File rejected:', file.type);
+        }
+    }
+    
+    // Format file size
+    function formatFileSize(bytes) {
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
+        return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+    }
+    
+    // Toggle effect options
+    document.querySelectorAll('.effect-header').forEach(header => {
+        header.addEventListener('click', function() {
+            const options = this.nextElementSibling;
+            if (options) {
+                options.classList.toggle('hidden');
+            }
+        });
+    });
+    
+    // Checkbox handlers
+    const zoomEnabled = document.getElementById('zoomEnabled');
+    if (zoomEnabled) {
+        zoomEnabled.addEventListener('change', function() {
+            const options = document.getElementById('zoomOptions');
+            if (options) options.classList.toggle('hidden', !this.checked);
+        });
+    }
+    
+    const freezeEnabled = document.getElementById('freezeEnabled');
+    if (freezeEnabled) {
+        freezeEnabled.addEventListener('change', function() {
+            const options = document.getElementById('freezeOptions');
+            if (options) options.classList.toggle('hidden', !this.checked);
+        });
+    }
+    
+    const mirrorEnabled = document.getElementById('mirrorEnabled');
+    if (mirrorEnabled) {
+        mirrorEnabled.addEventListener('change', function() {
+            const options = document.getElementById('mirrorOptions');
+            if (options) options.classList.toggle('hidden', !this.checked);
+        });
+    }
+    
+    const rotateEnabled = document.getElementById('rotateEnabled');
+    if (rotateEnabled) {
+        rotateEnabled.addEventListener('change', function() {
+            const options = document.getElementById('rotateOptions');
+            if (options) options.classList.toggle('hidden', !this.checked);
+        });
+    }
+    
+    // Zoom factor display
+    const zoomFactor = document.getElementById('zoomFactor');
+    const zoomFactorValue = document.getElementById('zoomFactorValue');
+    if (zoomFactor && zoomFactorValue) {
+        zoomFactor.addEventListener('input', function() {
+            zoomFactorValue.textContent = Math.round(this.value * 100) + '%';
+        });
+    }
+    
+    // Process button click
+    if (processBtn) {
+        processBtn.addEventListener('click', uploadVideo);
+    }
+    
+    // Close modal button
+    const closeModalBtn = document.getElementById('closeModalBtn');
+    if (closeModalBtn) {
+        closeModalBtn.addEventListener('click', hideProgressModal);
+    }
+    
+    // Load jobs on page load
+    loadJobs();
+    setInterval(loadJobs, 3000); // Refresh every 3 seconds
+});
+
+// Upload video function
+async function uploadVideo() {
+    console.log('uploadVideo function called');
+    
+    const videoInput = document.getElementById('videoInput');
+    if (!videoInput) {
+        console.error('Video input not found');
+        return;
+    }
+    
+    const file = videoInput.files[0];
+    
+    if (!file) {
+        alert('Please select a video file');
+        return;
+    }
+    
+    console.log('Uploading file:', file.name);
+    
+    // Show progress modal
+    showProgressModal();
+    
+    // Create form data
+    const formData = new FormData();
+    formData.append('video', file);
+    
+    // Get all form values safely
+    const getValue = (id, defaultValue) => {
+        const el = document.getElementById(id);
+        return el ? el.value : defaultValue;
+    };
+    
+    const getChecked = (id) => {
+        const el = document.getElementById(id);
+        return el ? el.checked : false;
+    };
+    
+    formData.append('split_time', getValue('splitTime', '6'));
+    formData.append('remove_time', getValue('removeTime', '1'));
+    formData.append('zoom_enabled', getChecked('zoomEnabled') ? 'on' : 'off');
+    formData.append('zoom_factor', getValue('zoomFactor', '1.5'));
+    formData.append('zoom_type', getValue('zoomType', 'in'));
+    formData.append('freeze_enabled', getChecked('freezeEnabled') ? 'on' : 'off');
+    formData.append('freeze_duration', getValue('freezeDuration', '1'));
+    formData.append('mirror_enabled', getChecked('mirrorEnabled') ? 'on' : 'off');
+    formData.append('mirror_type', getValue('mirrorType', 'horizontal'));
+    formData.append('rotate_enabled', getChecked('rotateEnabled') ? 'on' : 'off');
+    formData.append('rotate_angle', getValue('rotateAngle', '90'));
+    
+    try {
+        console.log('Sending fetch request to /upload');
+        const response = await fetch('/upload', {
+            method: 'POST',
+            body: formData
+        });
+        
+        console.log('Response status:', response.status);
+        const data = await response.json();
+        console.log('Response data:', data);
+        
+        if (response.ok) {
+            currentJobId = data.job_id;
+            updateProgress(0, 'Processing...');
+            startStatusCheck(currentJobId);
+        } else {
+            hideProgressModal();
+            alert('Error: ' + (data.error || 'Unknown error'));
+        }
+    } catch (error) {
+        console.error('Upload error:', error);
+        hideProgressModal();
+        alert('Upload failed: ' + error.message);
+    }
+}
+
+// Progress modal functions
+function showProgressModal() {
+    console.log('Showing progress modal');
+    const modal = document.getElementById('progressModal');
+    const fill = document.getElementById('progressFill');
+    const text = document.getElementById('progressText');
+    const status = document.getElementById('progressStatus');
+    const closeBtn = document.getElementById('closeModalBtn');
+    
+    if (modal) {
+        modal.classList.remove('hidden');
+        if (fill) fill.style.width = '0%';
+        if (text) text.textContent = '0%';
+        if (status) status.textContent = 'Uploading...';
+        if (closeBtn) closeBtn.classList.add('hidden');
+    } else {
+        console.error('Progress modal not found');
+    }
+}
+
+function hideProgressModal() {
+    console.log('Hiding progress modal');
+    const modal = document.getElementById('progressModal');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+}
+
+function updateProgress(progress, status) {
+    console.log(`Progress update: ${progress}% - ${status}`);
+    const fill = document.getElementById('progressFill');
+    const text = document.getElementById('progressText');
+    const statusEl = document.getElementById('progressStatus');
+    
+    if (fill) fill.style.width = progress + '%';
+    if (text) text.textContent = progress + '%';
+    if (statusEl) statusEl.textContent = status;
+}
+
+// Check job status
+function startStatusCheck(jobId) {
+    console.log('Starting status check for job:', jobId);
+    
+    if (statusInterval) {
+        clearInterval(statusInterval);
+    }
+    
+    statusInterval = setInterval(async () => {
+        try {
+            const response = await fetch(`/status/${jobId}`);
+            const data = await response.json();
+            
+            console.log('Status update:', data);
+            updateProgress(data.progress, data.status);
+            
+            if (data.status === 'completed') {
+                console.log('Job completed');
+                clearInterval(statusInterval);
+                document.getElementById('progressStatus').textContent = 'Complete!';
+                document.getElementById('closeModalBtn').classList.remove('hidden');
+                loadJobs();
+                
+                // Auto download prompt
+                if (data.output_url) {
+                    setTimeout(() => {
+                        if (confirm('Download edited video?')) {
+                            window.location.href = data.output_url;
+                        }
+                    }, 500);
+                }
+            } else if (data.status === 'error') {
+                console.error('Job error:', data.error);
+                clearInterval(statusInterval);
+                document.getElementById('progressStatus').textContent = 'Error: ' + (data.error || 'Unknown error');
+                document.getElementById('closeModalBtn').classList.remove('hidden');
+            }
+        } catch (error) {
+            console.error('Status check failed:', error);
+        }
+    }, 1000);
+}
+
+// Load jobs list
+async function loadJobs() {
+    try {
+        const response = await fetch('/jobs');
+        const jobs = await response.json();
+        displayJobs(jobs);
+    } catch (error) {
+        console.error('Failed to load jobs:', error);
+    }
+}
+
+// Display jobs
+function displayJobs(jobs) {
+    const jobsList = document.getElementById('jobsList');
+    
+    if (!jobsList) {
+        console.error('Jobs list element not found');
+        return;
+    }
+    
+    if (jobs.length === 0) {
+        jobsList.innerHTML = '<p class="no-jobs">No active jobs</p>';
+        return;
+    }
+    
+    let html = '';
+    jobs.slice().reverse().forEach(job => {
+        html += `
+            <div class="job-item ${job.status}">
+                <div class="job-header">
+                    <span class="job-filename">${truncateFilename(job.filename, 20)}</span>
+                    <span class="job-status ${job.status}">${job.status}</span>
+                </div>
+                <div class="job-progress">
+                    <div class="job-progress-fill" style="width: ${job.progress}%"></div>
+                </div>
+                <div class="job-actions">
+                    ${job.status === 'completed' ? 
+                        `<button class="download-btn" onclick="window.location.href='/download/${job.id}'">⬇️ Download</button>` : 
+                        `<span>${job.progress}%</span>`}
+                </div>
+                <div class="job-time">${job.created_at || ''}</div>
+            </div>
+        `;
+    });
+    
+    jobsList.innerHTML = html;
+}
+
+function truncateFilename(name, maxLength) {
+    if (!name) return '';
+    if (name.length <= maxLength) return name;
+    return name.substr(0, maxLength-3) + '...';
+}

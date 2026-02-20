@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>AI Video Editor Pro</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Padauk:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Navbar -->
+        <div class="navbar">
+            <div class="nav-brand">🎬 AI Video Editor Pro</div>
+            <div class="nav-user" id="navUser"></div>
+        </div>
+        
+        <h1>AI Video Editor</h1>
+        <p class="subtitle">Professional video editing with AI-powered effects</p>
+        
+        <div class="main-content">
+            <!-- Left Panel - Upload & Settings -->
+            <div class="left-panel">
+                <div class="upload-section">
+                    <h2>📁 Upload Video</h2>
+                    <div class="upload-area" id="uploadArea">
+                        <input type="file" id="videoInput" accept="video/*" hidden>
+                        <div class="upload-content">
+                            <span class="upload-icon">📹</span>
+                            <p>Click or drag video to upload</p>
+                            <p class="small">MP4, AVI, MOV, MKV (Max 500MB)</p>
+                        </div>
+                    </div>
+                    <div id="fileInfo" class="file-info hidden">
+                        <p><strong>Selected:</strong> <span id="fileName"></span></p>
+                        <p><strong>Size:</strong> <span id="fileSize"></span></p>
+                    </div>
+                </div>
+                
+                <div class="settings-section">
+                    <h2>⚙️ Timeline Settings</h2>
+                    
+                    <div class="setting-group">
+                        <label for="splitTime">Split Every (seconds):</label>
+                        <select id="splitTime" class="form-control">
+                            <option value="3">3 seconds</option>
+                            <option value="4">4 seconds</option>
+                            <option value="5">5 seconds</option>
+                            <option value="6" selected>6 seconds</option>
+                            <option value="7">7 seconds</option>
+                            <option value="8">8 seconds</option>
+                            <option value="9">9 seconds</option>
+                            <option value="10">10 seconds</option>
+                            <option value="15">15 seconds</option>
+                            <option value="20">20 seconds</option>
+                            <option value="30">30 seconds</option>
+                            <option value="60">60 seconds</option>
+                        </select>
+                    </div>
+                    
+                    <div class="setting-group">
+                        <label for="removeTime">Remove Last (seconds):</label>
+                        <select id="removeTime" class="form-control">
+                            <option value="0.5">0.5 seconds</option>
+                            <option value="1" selected>1 second</option>
+                            <option value="1.5">1.5 seconds</option>
+                            <option value="2">2 seconds</option>
+                            <option value="2.5">2.5 seconds</option>
+                            <option value="3">3 seconds</option>
+                        </select>
+                    </div>
+                    
+                    <div class="setting-group">
+                        <label for="outputQuality">Output Quality:</label>
+                        <select id="outputQuality" class="form-control">
+                            <option value="720p">720p (HD)</option>
+                            <option value="1080p" selected>1080p (Full HD)</option>
+                            <option value="4k">4K (Ultra HD)</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="effects-section">
+                    <h2>✨ Effects</h2>
+                    
+                    <!-- Basic Effects -->
+                    <div class="effect-card">
+                        <div class="effect-header">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="zoomEnabled" checked>
+                                <span>🔍 Zoom Effect</span>
+                            </label>
+                        </div>
+                        <div class="effect-options" id="zoomOptions">
+                            <div class="option-row">
+                                <label>Zoom Type:</label>
+                                <select id="zoomType">
+                                    <option value="in">Zoom In</option>
+                                    <option value="out">Zoom Out</option>
+                                </select>
+                            </div>
+                            <div class="option-row">
+                                <label>Zoom Factor: <span id="zoomFactorValue">150%</span></label>
+                                <input type="range" id="zoomFactor" min="1.1" max="2.0" step="0.1" value="1.5">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="effect-card">
+                        <div class="effect-header">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="freezeEnabled" checked>
+                                <span>❄️ Freeze Effect</span>
+                            </label>
+                        </div>
+                        <div class="effect-options" id="freezeOptions">
+                            <div class="option-row">
+                                <label>Freeze Duration:</label>
+                                <select id="freezeDuration">
+                                    <option value="0.5">0.5 seconds</option>
+                                    <option value="1" selected>1 second</option>
+                                    <option value="1.5">1.5 seconds</option>
+                                    <option value="2">2 seconds</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="effect-card">
+                        <div class="effect-header">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="mirrorEnabled" checked>
+                                <span>🪞 Mirror Effect</span>
+                            </label>
+                        </div>
+                        <div class="effect-options" id="mirrorOptions">
+                            <div class="option-row">
+                                <label>Mirror Type:</label>
+                                <select id="mirrorType">
+                                    <option value="horizontal">Horizontal</option>
+                                    <option value="vertical">Vertical</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="effect-card">
+                        <div class="effect-header">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="rotateEnabled">
+                                <span>🔄 Rotate Effect</span>
+                            </label>
+                        </div>
+                        <div class="effect-options hidden" id="rotateOptions">
+                            <div class="option-row">
+                                <label>Rotate Angle:</label>
+                                <select id="rotateAngle">
+                                    <option value="90">90°</option>
+                                    <option value="180">180°</option>
+                                    <option value="270">270°</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Advanced Effects -->
+                    <div class="effect-card">
+                        <div class="effect-header">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="blurEnabled">
+                                <span>🌀 Blur Effect</span>
+                            </label>
+                        </div>
+                        <div class="effect-options hidden" id="blurOptions">
+                            <div class="option-row">
+                                <label>Blur Radius:</label>
+                                <input type="range" id="blurRadius" min="1" max="20" value="5">
+                                <span id="blurValue">5</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="effect-card">
+                        <div class="effect-header">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="glitchEnabled">
+                                <span>⚡ Glitch Effect</span>
+                            </label>
+                        </div>
+                        <div class="effect-options hidden" id="glitchOptions">
+                            <div class="option-row">
+                                <label>Intensity:</label>
+                                <input type="range" id="glitchIntensity" min="0.05" max="0.3" step="0.05" value="0.1">
+                                <span id="glitchValue">0.1</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="effect-card">
+                        <div class="effect-header">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="oldfilmEnabled">
+                                <span>🎞️ Old Film Effect</span>
+                            </label>
+                        </div>
+                        <div class="effect-options hidden" id="oldfilmOptions">
+                            <div class="option-row">
+                                <label>Scratch Intensity:</label>
+                                <input type="range" id="scratchIntensity" min="0.05" max="0.3" step="0.05" value="0.1">
+                                <span id="scratchValue">0.1</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="effect-card">
+                        <div class="effect-header">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="speedEnabled">
+                                <span>⚡ Speed Effect</span>
+                            </label>
+                        </div>
+                        <div class="effect-options hidden" id="speedOptions">
+                            <div class="option-row">
+                                <label>Speed Type:</label>
+                                <select id="speedType">
+                                    <option value="fast">Speed Up</option>
+                                    <option value="slow">Slow Down</option>
+                                </select>
+                            </div>
+                            <div class="option-row">
+                                <label>Speed Factor:</label>
+                                <input type="range" id="speedFactor" min="1.2" max="3.0" step="0.2" value="1.5">
+                                <span id="speedValue">1.5x</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Audio Effects -->
+                    <div class="effect-card">
+                        <div class="effect-header">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="noiseReduction">
+                                <span>🔇 Noise Reduction</span>
+                            </label>
+                        </div>
+                        <div class="effect-options hidden" id="noiseOptions">
+                            <div class="option-row">
+                                <label>Strength:</label>
+                                <input type="range" id="noiseStrength" min="0.1" max="1.0" step="0.1" value="0.5">
+                                <span id="noiseValue">0.5</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Text/Title -->
+                    <div class="effect-card">
+                        <div class="effect-header">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="textEnabled">
+                                <span>📝 Add Text/Title</span>
+                            </label>
+                        </div>
+                        <div class="effect-options hidden" id="textOptions">
+                            <div class="option-row">
+                                <label>Text (Myanmar):</label>
+                                <input type="text" id="textContent" placeholder="မြန်မာစာရိုက်ပါ" style="font-family: 'Padauk', sans-serif;">
+                            </div>
+                            <div class="option-row">
+                                <label>Position:</label>
+                                <select id="textPosition">
+                                    <option value="center">Center</option>
+                                    <option value="top">Top</option>
+                                    <option value="bottom">Bottom</option>
+                                    <option value="watermark">Watermark</option>
+                                </select>
+                            </div>
+                            <div class="option-row">
+                                <label>Color:</label>
+                                <input type="color" id="textColor" value="#ffffff">
+                            </div>
+                            <div class="option-row">
+                                <label>Size:</label>
+                                <input type="range" id="textSize" min="20" max="100" value="40">
+                                <span id="textSizeValue">40</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Transitions -->
+                    <div class="effect-card">
+                        <div class="effect-header">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="transitionEnabled">
+                                <span>🔄 Transition Effects</span>
+                            </label>
+                        </div>
+                        <div class="effect-options hidden" id="transitionOptions">
+                            <div class="option-row">
+                                <label>Type:</label>
+                                <select id="transitionType">
+                                    <option value="fade">Fade</option>
+                                    <option value="slide">Slide</option>
+                                    <option value="zoom">Zoom</option>
+                                </select>
+                            </div>
+                            <div class="option-row">
+                                <label>Duration:</label>
+                                <select id="transitionDuration">
+                                    <option value="0.5">0.5 seconds</option>
+                                    <option value="1" selected>1 second</option>
+                                    <option value="1.5">1.5 seconds</option>
+                                    <option value="2">2 seconds</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Background Music -->
+                    <div class="effect-card">
+                        <div class="effect-header">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="musicEnabled">
+                                <span>🎵 Background Music</span>
+                            </label>
+                        </div>
+                        <div class="effect-options hidden" id="musicOptions">
+                            <div class="option-row">
+                                <label>Music File:</label>
+                                <input type="file" id="musicFile" accept="audio/*">
+                            </div>
+                            <div class="option-row">
+                                <label>Volume:</label>
+                                <input type="range" id="musicVolume" min="0" max="1" step="0.1" value="0.5">
+                                <span id="musicVolumeValue">50%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <button class="process-btn" id="processBtn" disabled>
+                    <span>🎬 Process Video</span>
+                </button>
+            </div>
+            
+            <!-- Right Panel - Jobs & Progress -->
+            <div class="right-panel">
+                <h2>📊 Processing Jobs</h2>
+                <div id="jobsList" class="jobs-list">
+                    <p class="no-jobs">No active jobs</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Progress Modal -->
+    <div id="progressModal" class="modal hidden">
+        <div class="modal-content">
+            <h3>Processing Video...</h3>
+            <div class="progress-bar">
+                <div id="progressFill" class="progress-fill" style="width: 0%"></div>
+            </div>
+            <p id="progressText">0%</p>
+            <p id="progressStatus" class="status-text">Starting...</p>
+            <button id="closeModalBtn" class="modal-btn hidden">Close</button>
+        </div>
+    </div>
+    
+    <!-- Theme Toggle -->
+    <button class="theme-toggle" onclick="toggleDarkMode()" id="themeToggle">🌙</button>
+    
+    <script src="/static/script.js"></script>
+</body>
+</html>
