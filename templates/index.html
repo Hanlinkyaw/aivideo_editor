@@ -85,7 +85,7 @@
                 <div class="effects-section">
                     <h2>✨ Effects</h2>
                     
-                    <!-- Zoom Effect Card - ပြင်ဆင်ထားတဲ့အပိုင်း -->
+                    <!-- Zoom Effect Card -->
                     <div class="effect-card">
                         <div class="effect-header">
                             <label class="checkbox-label">
@@ -136,7 +136,7 @@
                         </div>
                     </div>
                     
-                    <!-- Freeze Effect Card - ပြင်ဆင်ထားတဲ့အပိုင်း -->
+                    <!-- Freeze Effect Card -->
                     <div class="effect-card">
                         <div class="effect-header">
                             <label class="checkbox-label">
@@ -406,7 +406,7 @@
         </div>
     </div>
     
-    <!-- Progress Modal -->
+    <!-- Progress Modal with Cancel Button -->
     <div id="progressModal" class="modal hidden">
         <div class="modal-content">
             <h3>Processing Video...</h3>
@@ -415,7 +415,10 @@
             </div>
             <p id="progressText">0%</p>
             <p id="progressStatus" class="status-text">Starting...</p>
-            <button id="closeModalBtn" class="modal-btn hidden">Close</button>
+            <div class="modal-buttons">
+                <button id="cancelJobBtn" class="modal-btn cancel-btn hidden">Cancel</button>
+                <button id="closeModalBtn" class="modal-btn hidden">Close</button>
+            </div>
         </div>
     </div>
     

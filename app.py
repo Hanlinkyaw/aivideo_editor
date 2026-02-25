@@ -908,6 +908,33 @@ def health_check():
 def too_large(e):
     return jsonify({'error': 'File too large. Maximum size is 10240MB'}), 413
 
+# ==================== CANCEL JOB ====================
+@app.route('/cancel/<job_id>', methods=['POST'])
+@login_required
+def cancel_job(job_id):
+    """Cancel a processing job"""
+    if job_id in active_jobs and active_jobs[job_id]['user_id'] == current_user.id:
+        job = active_jobs[job_id]
+        
+        # Only allow cancel if job is processing or queued
+        if job['status'] in ['processing', 'queued']:
+            job['status'] = 'cancelled'
+            job['progress'] = 0
+            job['error'] = 'Job cancelled by user'
+            
+            # Try to cleanup if possible
+            if 'thread' in job and job['thread'].is_alive():
+                # Can't forcefully kill thread, but mark as cancelled
+                pass
+            
+            logger.info(f"Job {job_id} cancelled by user {current_user.id}")
+            return jsonify({'success': True, 'message': 'Job cancelled'})
+        else:
+            return jsonify({'error': 'Job cannot be cancelled'}), 400
+    
+    return jsonify({'error': 'Job not found'}), 404
+
+
 if __name__ == '__main__':
     print("\n" + "="*70)
     print("🎬 AI Video Editor Web App - Complete Edition")

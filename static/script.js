@@ -1,6 +1,6 @@
 // ========================================
 // AI Video Editor - Complete JavaScript
-// Includes: Upload, Progress, Effects, Dark Mode
+// Includes: Upload, Progress, Effects, Dark Mode, Cancel Job
 // ========================================
 
 // Global variables
@@ -292,6 +292,18 @@ document.addEventListener('DOMContentLoaded', function() {
         closeModalBtn.addEventListener('click', hideProgressModal);
     }
     
+    // ========== CANCEL BUTTON ==========
+    
+    const cancelJobBtn = document.getElementById('cancelJobBtn');
+    if (cancelJobBtn) {
+        cancelJobBtn.addEventListener('click', function() {
+            const jobId = this.getAttribute('data-job-id');
+            if (jobId) {
+                cancelJob(jobId);
+            }
+        });
+    }
+    
     // ========== CHECK LOGIN STATUS ==========
     
     checkLoginStatus();
@@ -337,6 +349,77 @@ async function logout() {
         }
     } catch (error) {
         console.error('Logout failed:', error);
+    }
+}
+
+// ========== CANCEL JOB ==========
+
+async function cancelJob(jobId) {
+    if (!confirm('Are you sure you want to cancel this job?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/cancel/${jobId}`, {
+            method: 'POST'
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            alert('Job cancelled successfully');
+            
+            // Clear status check interval
+            if (statusInterval) {
+                clearInterval(statusInterval);
+                statusInterval = null;
+            }
+            
+            // Hide progress modal
+            hideProgressModal();
+            
+            // Enable buttons
+            setButtonsEnabled(true);
+            
+            // Reload jobs list
+            loadJobs();
+        } else {
+            alert('Error: ' + (data.error || 'Failed to cancel job'));
+        }
+    } catch (error) {
+        console.error('Cancel error:', error);
+        alert('Failed to cancel job: ' + error.message);
+    }
+}
+
+// ========== DISABLE/ENABLE BUTTONS ==========
+
+function setButtonsEnabled(enabled) {
+    const processBtn = document.getElementById('processBtn');
+    const effectCheckboxes = document.querySelectorAll('.effect-header input[type="checkbox"]');
+    const settingControls = document.querySelectorAll('.setting-group select, .setting-group input');
+    const uploadArea = document.getElementById('uploadArea');
+    
+    if (processBtn) {
+        processBtn.disabled = !enabled;
+    }
+    
+    effectCheckboxes.forEach(checkbox => {
+        checkbox.disabled = !enabled;
+    });
+    
+    settingControls.forEach(control => {
+        control.disabled = !enabled;
+    });
+    
+    if (uploadArea) {
+        if (enabled) {
+            uploadArea.style.opacity = '1';
+            uploadArea.style.pointerEvents = 'auto';
+        } else {
+            uploadArea.style.opacity = '0.5';
+            uploadArea.style.pointerEvents = 'none';
+        }
     }
 }
 
@@ -466,6 +549,13 @@ async function uploadVideo() {
         
         if (response.ok) {
             currentJobId = data.job_id;
+            
+            // Store job ID in cancel button
+            const cancelBtn = document.getElementById('cancelJobBtn');
+            if (cancelBtn) {
+                cancelBtn.setAttribute('data-job-id', currentJobId);
+            }
+            
             updateProgress(0, 'Processing...');
             startStatusCheck(currentJobId);
         } else {
@@ -488,13 +578,21 @@ function showProgressModal() {
     const text = document.getElementById('progressText');
     const status = document.getElementById('progressStatus');
     const closeBtn = document.getElementById('closeModalBtn');
+    const cancelBtn = document.getElementById('cancelJobBtn');
     
     if (modal) {
         modal.classList.remove('hidden');
         if (fill) fill.style.width = '0%';
         if (text) text.textContent = '0%';
-        if (status) status.textContent = 'Uploading...';
+        if (status) status.textContent = 'Processing...';
         if (closeBtn) closeBtn.classList.add('hidden');
+        if (cancelBtn) {
+            cancelBtn.classList.remove('hidden');
+            cancelBtn.disabled = false;
+        }
+        
+        // Disable buttons during processing
+        setButtonsEnabled(false);
     } else {
         console.error('Progress modal not found');
     }
@@ -503,8 +601,29 @@ function showProgressModal() {
 function hideProgressModal() {
     console.log('Hiding progress modal');
     const modal = document.getElementById('progressModal');
+    const cancelBtn = document.getElementById('cancelJobBtn');
+    const closeBtn = document.getElementById('closeModalBtn');
+    
     if (modal) {
         modal.classList.add('hidden');
+    }
+    
+    if (cancelBtn) {
+        cancelBtn.classList.add('hidden');
+        cancelBtn.removeAttribute('data-job-id');
+    }
+    
+    if (closeBtn) {
+        closeBtn.classList.add('hidden');
+    }
+    
+    // Enable buttons
+    setButtonsEnabled(true);
+    
+    // Clear status check interval
+    if (statusInterval) {
+        clearInterval(statusInterval);
+        statusInterval = null;
     }
 }
 
@@ -541,6 +660,11 @@ function startStatusCheck(jobId) {
                 clearInterval(statusInterval);
                 document.getElementById('progressStatus').textContent = 'Complete!';
                 document.getElementById('closeModalBtn').classList.remove('hidden');
+                document.getElementById('cancelJobBtn').classList.add('hidden');
+                
+                // Enable buttons
+                setButtonsEnabled(true);
+                
                 loadJobs();
                 
                 // Show preview and download options
@@ -562,6 +686,21 @@ function startStatusCheck(jobId) {
                 clearInterval(statusInterval);
                 document.getElementById('progressStatus').textContent = 'Error: ' + (data.error || 'Unknown error');
                 document.getElementById('closeModalBtn').classList.remove('hidden');
+                document.getElementById('cancelJobBtn').classList.add('hidden');
+                
+                // Enable buttons
+                setButtonsEnabled(true);
+            } else if (data.status === 'cancelled') {
+                console.log('Job cancelled');
+                clearInterval(statusInterval);
+                document.getElementById('progressStatus').textContent = 'Cancelled';
+                document.getElementById('closeModalBtn').classList.remove('hidden');
+                document.getElementById('cancelJobBtn').classList.add('hidden');
+                
+                // Enable buttons
+                setButtonsEnabled(true);
+                
+                loadJobs();
             }
         } catch (error) {
             console.error('Status check failed:', error);
@@ -596,6 +735,19 @@ function displayJobs(jobs) {
     
     let html = '';
     jobs.slice().reverse().forEach(job => {
+        let actions = '';
+        
+        if (job.status === 'completed') {
+            actions = `<button class="download-btn" onclick="window.location.href='/download/${job.id}'">⬇️ Download</button>`;
+        } else if (job.status === 'processing' || job.status === 'queued') {
+            actions = `
+                <span>${job.progress}%</span>
+                <button class="cancel-job-btn" onclick="cancelJob('${job.id}')">✖ Cancel</button>
+            `;
+        } else {
+            actions = `<span>${job.progress}%</span>`;
+        }
+        
         html += `
             <div class="job-item ${job.status}">
                 <div class="job-header">
@@ -606,9 +758,7 @@ function displayJobs(jobs) {
                     <div class="job-progress-fill" style="width: ${job.progress}%"></div>
                 </div>
                 <div class="job-actions">
-                    ${job.status === 'completed' ? 
-                        `<button class="download-btn" onclick="window.location.href='/download/${job.id}'">⬇️ Download</button>` : 
-                        `<span>${job.progress}%</span>`}
+                    ${actions}
                 </div>
             </div>
         `;
