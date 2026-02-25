@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 AI Video Editor Web App - Complete Version with Authentication, Effects, Dark Mode
+Includes: Video Editor, Myanmar Transcript Generator, AI Voice Generator
 """
 
 import os
@@ -12,6 +13,8 @@ import time
 import traceback
 import sqlite3
 import json
+import subprocess
+import tempfile
 from datetime import datetime
 from functools import wraps
 
@@ -21,8 +24,30 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 import numpy as np
 
+# For Transcript Generation
+try:
+    import whisper
+    print("✅ Whisper imported successfully")
+except ImportError as e:
+    print(f"❌ Whisper import error: {e}")
+    print("Please run: pip install openai-whisper")
 
-# MoviePy imports - မူလအတိုင်း ပြန်သုံးထားတယ်
+# For Voice Generation
+try:
+    from gtts import gTTS
+    print("✅ gTTS imported successfully")
+except ImportError as e:
+    print(f"❌ gTTS import error: {e}")
+    print("Please run: pip install gtts")
+
+# For Audio Processing
+try:
+    import speech_recognition as sr
+    print("✅ Speech Recognition imported successfully")
+except ImportError as e:
+    print(f"❌ Speech Recognition import error: {e}")
+
+# MoviePy imports
 try:
     from moviepy.editor import VideoFileClip, CompositeVideoClip, ImageClip, TextClip
     from moviepy.editor import concatenate_videoclips, AudioFileClip, CompositeAudioClip
@@ -31,7 +56,6 @@ try:
 except ImportError as e:
     print(f"❌ MoviePy import error: {e}")
     print("Please run: pip install moviepy")
-    sys.exit(1)
 
 # PIL for image processing
 try:
@@ -40,8 +64,6 @@ try:
 except ImportError as e:
     print(f"❌ Pillow import error: {e}")
     print("Please run: pip install pillow")
-    sys.exit(1)
-
 
 # Setup logging
 logging.basicConfig(
@@ -58,13 +80,17 @@ app = Flask(__name__)
 # Configuration
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
 app.config['OUTPUT_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'outputs')
-app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024 * 1024  # 1024MB  max
-app.config['ALLOWED_EXTENSIONS'] = {'mp4', 'avi', 'mov', 'mkv', 'flv', 'wmv'}
+app.config['AUDIO_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'audio')
+app.config['TRANSCRIPT_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'transcripts')
+app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024 * 1024  # 1GB max
+app.config['ALLOWED_EXTENSIONS'] = {'mp4', 'avi', 'mov', 'mkv', 'flv', 'wmv', 'mp3', 'wav', 'm4a'}
 app.config['SECRET_KEY'] = 'video-editor-secret-key-change-this-in-production'
 
 # Create folders if not exist
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['OUTPUT_FOLDER'], exist_ok=True)
+os.makedirs(app.config['AUDIO_FOLDER'], exist_ok=True)
+os.makedirs(app.config['TRANSCRIPT_FOLDER'], exist_ok=True)
 
 # Login Manager Setup
 login_manager = LoginManager()
@@ -86,9 +112,28 @@ def init_db():
                  (id TEXT PRIMARY KEY,
                   user_id INTEGER,
                   filename TEXT,
+                  type TEXT,
                   status TEXT,
                   created_at TIMESTAMP,
                   output_path TEXT,
+                  FOREIGN KEY (user_id) REFERENCES users (id))''')
+    
+    c.execute('''CREATE TABLE IF NOT EXISTS transcripts
+                 (id TEXT PRIMARY KEY,
+                  user_id INTEGER,
+                  filename TEXT,
+                  content TEXT,
+                  language TEXT,
+                  created_at TIMESTAMP,
+                  FOREIGN KEY (user_id) REFERENCES users (id))''')
+    
+    c.execute('''CREATE TABLE IF NOT EXISTS voices
+                 (id TEXT PRIMARY KEY,
+                  user_id INTEGER,
+                  text TEXT,
+                  audio_path TEXT,
+                  language TEXT,
+                  created_at TIMESTAMP,
                   FOREIGN KEY (user_id) REFERENCES users (id))''')
     conn.commit()
     conn.close()
@@ -119,42 +164,26 @@ def allowed_file(filename):
     """Check if file extension is allowed"""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
-# ==================== NEW TIMED EFFECT FUNCTIONS ====================
+# ==================== VIDEO EDITOR EFFECT FUNCTIONS ====================
 
 def zoom_effect_timed(clip, zoom_factor=1.5, zoom_type='in', interval=7, zoom_duration=2):
-    """
-    New: Zoom In/Out Effect with timed intervals 
-    - interval: ဘယ်နှစ်စက္ကန့်တစ်ခါ လုပ်မလဲ (ဥပမာ ၇ စက္ကန့်)
-    - zoom_duration: zoom လုပ်တဲ့ကြာချိန် (ဥပမာ ၂ စက္ကန့်)
-    """
+    """Zoom In/Out Effect with timed intervals"""
     def make_frame(gf, t):
-        """
-        gf: get_frame function
-        t: time
-        """
-        # Calculate which cycle we're in
         cycle_time = t % interval
         
         if cycle_time < zoom_duration:
-            # Zoom phase
             progress = cycle_time / zoom_duration
-            
             if zoom_type == 'in':
-                # Zoom in gradually
                 current_zoom = 1.0 + (zoom_factor - 1.0) * progress
             else:
-                # Zoom out gradually
                 current_zoom = 1.0 + (zoom_factor - 1.0) * (1 - progress)
         else:
-            # Normal phase (no zoom)
             current_zoom = 1.0
         
-        # Get frame at time t using gf
         frame = gf(t)
         h, w = frame.shape[:2]
         
         if current_zoom > 1:
-            # Zoom in (crop and resize)
             new_h, new_w = int(h / current_zoom), int(w / current_zoom)
             y_start = (h - new_h) // 2
             x_start = (w - new_w) // 2
@@ -163,55 +192,28 @@ def zoom_effect_timed(clip, zoom_factor=1.5, zoom_type='in', interval=7, zoom_du
             zoomed = np.array(pil_img.resize((w, h), Image.Resampling.LANCZOS))
             return zoomed
         else:
-            # No zoom
             return frame
     
-    # Return clip with the effect applied
     return clip.fl(make_frame)
 
-
-
 def freeze_effect_timed(clip, freeze_duration=1, interval=5):
-    """
-    New: Freeze effect with timed intervals 
-    - interval: ဘယ်နှစ်စက္ကန့်တစ်ခါ freeze လုပ်မလဲ
-    - freeze_duration: freeze လုပ်တဲ့ကြာချိန်
-    """
+    """Freeze effect with timed intervals"""
     def make_frame(gf, t):
-        """
-        gf: get_frame function
-        t: time
-        """
-        # Calculate which segment we're in
         segment = int(t // interval)
-        segment_start = segment * interval
         segment_end = (segment + 1) * interval
         freeze_start = segment_end - freeze_duration
         
         if t >= freeze_start and t < segment_end:
-            # Freeze phase - return the frame from the start of freeze
             return gf(freeze_start)
         else:
-            # Normal phase
             return gf(t)
     
-    # Return clip with the effect applied
     return clip.fl(make_frame)
 
-
-
-
-
-
-# ==================== ORIGINAL EFFECT FUNCTIONS ====================
-
 def zoom_effect(clip, zoom_factor=1.5, zoom_type='in'):
-    """Zoom In/Out Effect using PIL"""
-    logger.debug(f"Applying zoom effect: {zoom_type} {zoom_factor}")
-    
+    """Original Zoom Effect"""
     def fl(im):
         h, w = im.shape[:2]
-        
         if zoom_type == 'in':
             new_h, new_w = int(h / zoom_factor), int(w / zoom_factor)
             y_start = (h - new_h) // 2
@@ -219,38 +221,30 @@ def zoom_effect(clip, zoom_factor=1.5, zoom_type='in'):
             cropped = im[y_start:y_start+new_h, x_start:x_start+new_w]
             pil_img = Image.fromarray(cropped)
             zoomed = np.array(pil_img.resize((w, h), Image.Resampling.LANCZOS))
+            return zoomed
         else:
             new_h, new_w = int(h * zoom_factor), int(w * zoom_factor)
             pil_img = Image.fromarray(im)
             shrunk = np.array(pil_img.resize((new_w, new_h), Image.Resampling.LANCZOS))
-            
             zoomed = np.zeros((h, w, 3), dtype=np.uint8)
             y_start = (h - new_h) // 2
             x_start = (w - new_w) // 2
             zoomed[y_start:y_start+new_h, x_start:x_start+new_w] = shrunk
-        
-        return zoomed
-    
+            return zoomed
     return clip.fl_image(fl)
 
 def freeze_effect(clip, freeze_duration=1):
-    """Freeze Effect - freeze last frame"""
-    logger.debug(f"Applying freeze effect: {freeze_duration}s")
-    
+    """Original Freeze Effect"""
     if clip.duration <= freeze_duration:
         return clip
-    
     freeze_time = clip.duration - freeze_duration
     freeze_frame = clip.to_ImageClip(freeze_time)
     freeze_frame = freeze_frame.set_duration(freeze_duration)
     main_part = clip.subclip(0, freeze_time)
-    
     return CompositeVideoClip([main_part, freeze_frame.set_start(main_part.duration)])
 
 def mirror_effect(clip, mirror_type='horizontal'):
-    """Mirror Effect"""
-    logger.debug(f"Applying mirror effect: {mirror_type}")
-    
+    """Mirror effect"""
     def fl(im):
         if mirror_type == 'horizontal':
             return np.fliplr(im)
@@ -259,9 +253,7 @@ def mirror_effect(clip, mirror_type='horizontal'):
     return clip.fl_image(fl)
 
 def rotate_effect(clip, angle=90):
-    """Rotate Effect"""
-    logger.debug(f"Applying rotate effect: {angle}°")
-    
+    """Rotate effect"""
     def fl(im):
         pil_img = Image.fromarray(im)
         rotated = np.array(pil_img.rotate(angle, expand=True))
@@ -269,114 +261,109 @@ def rotate_effect(clip, angle=90):
     return clip.fl_image(fl)
 
 def blur_effect(clip, blur_radius=5):
-    """Gaussian Blur Effect"""
-    logger.debug(f"Applying blur effect: {blur_radius}")
-    
+    """Gaussian blur"""
     def fl(im):
         pil_img = Image.fromarray(im)
         blurred = pil_img.filter(ImageFilter.GaussianBlur(radius=blur_radius))
         return np.array(blurred)
-    
     return clip.fl_image(fl)
 
 def glitch_effect(clip, intensity=0.1):
-    """Glitch/RGB Shift Effect"""
-    logger.debug(f"Applying glitch effect: {intensity}")
-    
+    """RGB shift glitch"""
     def fl(im):
         h, w = im.shape[:2]
         shift = int(w * intensity)
-        
         r = im[:, :, 0]
         g = im[:, :, 1]
         b = im[:, :, 2]
-        
         r_shifted = np.roll(r, shift, axis=1)
         b_shifted = np.roll(b, -shift, axis=1)
-        
         glitched = np.stack([r_shifted, g, b_shifted], axis=2)
         return np.clip(glitched, 0, 255).astype(np.uint8)
-    
     return clip.fl_image(fl)
 
 def old_film_effect(clip, scratch_intensity=0.1):
-    """Old Film Effect with scratches and flicker"""
-    logger.debug(f"Applying old film effect")
-    
+    """Old film with scratches"""
     def fl(im, t):
         h, w = im.shape[:2]
-        
-        # Sepia
         sepia_filter = np.array([[0.393, 0.769, 0.189],
                                  [0.349, 0.686, 0.168],
                                  [0.272, 0.534, 0.131]])
         sepia = im @ sepia_filter.T
         sepia = np.clip(sepia, 0, 255).astype(np.uint8)
-        
-        # Scratches
         if np.random.random() < scratch_intensity:
             scratch_y = np.random.randint(0, h)
             scratch_height = np.random.randint(1, 5)
             sepia[scratch_y:scratch_y+scratch_height, :] = 255
-        
-        # Flicker
         flicker = 0.8 + 0.4 * np.random.random()
         sepia = (sepia * flicker).astype(np.uint8)
-        
         return sepia
-    
     return clip.fl(fl)
 
 def speed_effect(clip, factor=1.5, speed_type='fast'):
-    """Speed up or slow down effect"""
-    logger.debug(f"Applying speed effect: {speed_type} {factor}x")
-    
+    """Speed up/down"""
     if speed_type == 'fast':
         return clip.fx(speedx, factor)
     else:
         return clip.fx(speedx, 1/factor)
 
 def text_effect(clip, text, font_path=None, font_size=40, color='white', position='center'):
-    """Add text overlay to video with Myanmar font support"""
-    logger.debug(f"Adding text: {text}")
-    
-    # Create text clip
-    if font_path and os.path.exists(font_path):
-        try:
-            txt_clip = TextClip(text, fontsize=font_size, color=color, font=font_path)
-        except:
-            txt_clip = TextClip(text, fontsize=font_size, color=color)
-    else:
-        txt_clip = TextClip(text, fontsize=font_size, color=color)
-    
-    txt_clip = txt_clip.set_duration(clip.duration)
-    
-    # Set position
-    if position == 'center':
-        txt_clip = txt_clip.set_position('center')
-    elif position == 'top':
-        txt_clip = txt_clip.set_position(('center', 20))
-    elif position == 'bottom':
-        txt_clip = txt_clip.set_position(('center', 'bottom'))
-    elif position == 'watermark':
-        txt_clip = txt_clip.set_position((10, 10)).set_opacity(0.5)
-    
-    return CompositeVideoClip([clip, txt_clip])
+    """Add Myanmar text to video"""
+    try:
+        def make_text_frame(t):
+            h, w = clip.size
+            img = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(img)
+            
+            try:
+                if font_path and os.path.exists(font_path):
+                    font = ImageFont.truetype(font_path, font_size)
+                else:
+                    font = ImageFont.load_default()
+            except:
+                font = ImageFont.load_default()
+            
+            if position == 'center':
+                x = w // 2
+                y = h // 2
+            elif position == 'top':
+                x = w // 2
+                y = 50
+            elif position == 'bottom':
+                x = w // 2
+                y = h - 100
+            elif position == 'watermark':
+                x = 50
+                y = 50
+            
+            draw.text((x, y), text, fill=color, font=font, anchor='mm')
+            return np.array(img)
+        
+        txt_clip = ImageClip(make_text_frame(0), duration=clip.duration, ismask=False)
+        return CompositeVideoClip([clip, txt_clip.set_position(('center', 'center'))])
+    except Exception as e:
+        logger.error(f"Text effect error: {e}")
+        return clip
 
 def fade_transition(clip1, clip2, duration=1):
-    """Fade transition between two clips"""
+    """Fade transition"""
     clip1_end = clip1.fx(fadeout, duration)
     clip2_start = clip2.fx(fadein, duration)
-    
     return concatenate_videoclips([clip1_end, clip2_start], method="compose")
 
 def slide_transition(clip1, clip2, duration=1, direction='left'):
     """Slide transition"""
-    if direction == 'left':
-        clip2_slide = slide_in(clip2, duration, 'left')
-    else:
-        clip2_slide = slide_in(clip2, duration, 'right')
+    def slide_effect(get_frame, t):
+        frame = get_frame(t)
+        h, w = frame.shape[:2]
+        if direction == 'left':
+            shift = int((t / duration) * w)
+            return np.roll(frame, -shift, axis=1)
+        else:
+            shift = int((t / duration) * w)
+            return np.roll(frame, shift, axis=1)
     
+    clip2_slide = clip2.fl(slide_effect).set_duration(duration)
     return CompositeVideoClip([
         clip1.set_duration(clip1.duration - duration),
         clip2_slide.set_start(clip1.duration - duration)
@@ -388,48 +375,58 @@ def zoom_transition(clip1, clip2, duration=1):
         frame = get_frame(t)
         h, w = frame.shape[:2]
         zoom = 1 + t/duration
-        
         pil_img = Image.fromarray(frame)
         new_w, new_h = int(w * zoom), int(h * zoom)
         zoomed = np.array(pil_img.resize((new_w, new_h), Image.Resampling.LANCZOS))
-        
         y_start = (new_h - h) // 2
         x_start = (new_w - w) // 2
         return zoomed[y_start:y_start+h, x_start:x_start+w]
     
     clip2_zoomed = clip2.fl(zoom_in).set_duration(duration)
-    
     return CompositeVideoClip([
         clip1.set_duration(clip1.duration - duration),
         clip2_zoomed.set_start(clip1.duration - duration)
     ])
 
 def add_background_music(clip, music_path, volume=0.5):
-    """Add background music to video"""
-    logger.debug(f"Adding background music: {music_path}")
-    
+    """Add background music"""
     if not os.path.exists(music_path):
-        logger.error(f"Music file not found: {music_path}")
         return clip
-    
     music = AudioFileClip(music_path)
-    
     if music.duration < clip.duration:
         music = music.loop(duration=clip.duration)
     else:
         music = music.subclip(0, clip.duration)
-    
     music = music.volumex(volume)
-    
     if clip.audio:
         final_audio = CompositeAudioClip([clip.audio, music])
     else:
         final_audio = music
-    
     return clip.set_audio(final_audio)
 
+def reduce_noise_effect(clip, strength=0.5):
+    """Background noise reduction"""
+    try:
+        if clip.audio:
+            audio = clip.audio
+            from scipy import signal
+            
+            def reduce_noise(get_audio, t):
+                samples = get_audio(t)
+                if samples is None or len(samples) == 0:
+                    return samples
+                b, a = signal.butter(4, 0.1, 'low')
+                filtered = signal.filtfilt(b, a, samples)
+                return filtered.astype(samples.dtype)
+            
+            filtered_audio = audio.fl(reduce_noise)
+            return clip.set_audio(filtered_audio)
+    except Exception as e:
+        logger.error(f"Noise reduction error: {e}")
+    return clip
+
 def get_output_parameters(quality):
-    """Get video parameters based on quality setting"""
+    """Get video parameters based on quality"""
     qualities = {
         '720p': {'codec': 'libx264', 'bitrate': '2000k', 'preset': 'medium'},
         '1080p': {'codec': 'libx264', 'bitrate': '5000k', 'preset': 'medium'},
@@ -442,16 +439,14 @@ def get_output_parameters(quality):
 def process_video_task(job_id, input_path, options, user_id):
     """Background video processing task"""
     try:
-        logger.info(f"🎬 Starting job {job_id} for user {user_id}")
+        logger.info(f"🎬 Starting video edit job {job_id} for user {user_id}")
         active_jobs[job_id]['status'] = 'processing'
         active_jobs[job_id]['progress'] = 0
         active_jobs[job_id]['start_time'] = time.time()
         
-        # Check input file
         if not os.path.exists(input_path):
             raise Exception(f"Input file not found: {input_path}")
         
-        # Get options
         split_time = int(options.get('split_time', 6))
         remove_time = float(options.get('remove_time', 1))
         output_quality = options.get('output_quality', '1080p')
@@ -467,7 +462,6 @@ def process_video_task(job_id, input_path, options, user_id):
         segment_count = 0
         total_segments = max(1, int(duration / split_time))
         
-        # Process each segment
         for start_time in range(0, int(duration), split_time):
             end_time = min(start_time + split_time, duration)
             
@@ -483,10 +477,9 @@ def process_video_task(job_id, input_path, options, user_id):
                 logger.info(f"Segment {segment_count + 1}: {start_time:.1f}s - {actual_end:.1f}s")
                 segment = video.subclip(start_time, actual_end)
                 
-                # Apply effects with new timed options
+                # Apply effects
                 if options.get('zoom_enabled') == 'on':
                     if options.get('zoom_timed') == 'on':
-                        # Use timed zoom (every X seconds)
                         zoom_interval = int(options.get('zoom_interval', 7))
                         zoom_duration = int(options.get('zoom_duration', 2))
                         segment = zoom_effect_timed(segment, 
@@ -495,21 +488,18 @@ def process_video_task(job_id, input_path, options, user_id):
                             zoom_interval,
                             zoom_duration)
                     else:
-                        # Use original zoom
                         segment = zoom_effect(segment, 
                             float(options.get('zoom_factor', 1.5)),
                             options.get('zoom_type', 'in'))
                 
                 if options.get('freeze_enabled') == 'on':
                     if options.get('freeze_timed') == 'on':
-                        # Use timed freeze (every X seconds)
                         freeze_interval = int(options.get('freeze_interval', 5))
                         freeze_duration = float(options.get('freeze_duration', 1))
                         segment = freeze_effect_timed(segment,
                             freeze_duration,
                             freeze_interval)
                     else:
-                        # Use original freeze (at the end)
                         segment = freeze_effect(segment,
                             float(options.get('freeze_duration', 1)))
                 
@@ -530,14 +520,14 @@ def process_video_task(job_id, input_path, options, user_id):
                         float(options.get('glitch_intensity', 0.1)))
                 
                 if options.get('oldfilm_enabled') == 'on':
-                    segment = old_film_effect(segment)
+                    segment = old_film_effect(segment,
+                        float(options.get('scratch_intensity', 0.1)))
                 
                 if options.get('speed_enabled') == 'on':
                     segment = speed_effect(segment,
                         float(options.get('speed_factor', 1.5)),
                         options.get('speed_type', 'fast'))
                 
-                # Add text if enabled
                 if options.get('text_enabled') == 'on' and options.get('text_content'):
                     segment = text_effect(segment,
                         options.get('text_content'),
@@ -545,6 +535,10 @@ def process_video_task(job_id, input_path, options, user_id):
                         int(options.get('text_size', 40)),
                         options.get('text_color', 'white'),
                         options.get('text_position', 'center'))
+                
+                if options.get('noise_reduction') == 'on':
+                    segment = reduce_noise_effect(segment,
+                        float(options.get('noise_strength', 0.5)))
                 
                 segments.append(segment)
                 segment_count += 1
@@ -555,15 +549,12 @@ def process_video_task(job_id, input_path, options, user_id):
         if not segments:
             raise Exception("No segments created")
         
-        # Concatenate with transitions
-        logger.info("Concatenating segments...")
         transition_type = options.get('transition_type', 'none')
         transition_duration = float(options.get('transition_duration', 1))
         
         if transition_type == 'none' or len(segments) == 1:
             final_video = concatenate_videoclips(segments, method="compose")
         else:
-            # Apply transitions between segments
             final_segments = []
             for i, seg in enumerate(segments):
                 if i == 0:
@@ -578,20 +569,16 @@ def process_video_task(job_id, input_path, options, user_id):
                     else:
                         transition_clip = seg
                     final_segments.append(transition_clip)
-            
             final_video = concatenate_videoclips(final_segments, method="compose")
         
-        # Add audio
         if video.audio:
             final_video = final_video.set_audio(video.audio)
         
-        # Add background music if enabled
         if options.get('music_enabled') == 'on' and options.get('music_path'):
             final_video = add_background_music(final_video,
                 options.get('music_path'),
                 float(options.get('music_volume', 0.5)))
         
-        # Save video
         output_filename = f"{job_id}_edited.mp4"
         output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
         
@@ -610,7 +597,6 @@ def process_video_task(job_id, input_path, options, user_id):
             logger='bar'
         )
         
-        # Cleanup
         video.close()
         final_video.close()
         for segment in segments:
@@ -618,101 +604,260 @@ def process_video_task(job_id, input_path, options, user_id):
         
         processing_time = time.time() - active_jobs[job_id]['start_time']
         
-        # Update job status
         active_jobs[job_id]['status'] = 'completed'
         active_jobs[job_id]['progress'] = 100
         active_jobs[job_id]['output_file'] = output_filename
         active_jobs[job_id]['output_path'] = output_path
         
-        # Save to database
         conn = sqlite3.connect('users.db')
         c = conn.cursor()
-        c.execute("INSERT INTO jobs (id, user_id, filename, status, created_at, output_path) VALUES (?, ?, ?, ?, ?, ?)",
-                 (job_id, user_id, os.path.basename(input_path), 'completed', datetime.now(), output_path))
+        c.execute("INSERT INTO jobs (id, user_id, filename, type, status, created_at, output_path) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                 (job_id, user_id, os.path.basename(input_path), 'video', 'completed', datetime.now(), output_path))
         conn.commit()
         conn.close()
         
-        logger.info(f"Job {job_id} completed in {processing_time:.1f} seconds")
+        logger.info(f"Video job {job_id} completed in {processing_time:.1f} seconds")
         
     except Exception as e:
-        logger.error(f"Error in job {job_id}: {str(e)}")
+        logger.error(f"Error in video job {job_id}: {str(e)}")
         logger.error(traceback.format_exc())
         
         active_jobs[job_id]['status'] = 'error'
         active_jobs[job_id]['error'] = str(e)
 
-# ==================== ROUTES ====================
+# ==================== TRANSCRIPT GENERATION ====================
 
-@app.route('/')
-def index():
-    """Main page"""
-    return render_template('index.html', user=current_user if current_user.is_authenticated else None)
-
-@app.route('/register', methods=['GET', 'POST'])
-def register():
-    """User registration"""
-    if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        email = request.form.get('email', '')
+@app.route('/transcript', methods=['POST'])
+@login_required
+def generate_transcript():
+    """Generate transcript from video/audio file"""
+    try:
+        logger.info(f"Transcript request from user {current_user.id}")
         
-        if not username or not password:
-            return jsonify({'error': 'Username and password required'}), 400
+        if 'file' not in request.files and not request.form.get('url'):
+            return jsonify({'error': 'No file or URL provided'}), 400
         
-        hashed_password = generate_password_hash(password)
+        job_id = str(uuid.uuid4())
         
-        try:
-            conn = sqlite3.connect('users.db')
-            c = conn.cursor()
-            c.execute("INSERT INTO users (username, password, email, created_at) VALUES (?, ?, ?, ?)",
-                     (username, hashed_password, email, datetime.now()))
-            conn.commit()
-            conn.close()
-            return jsonify({'message': 'User created successfully'})
-        except sqlite3.IntegrityError:
-            return jsonify({'error': 'Username already exists'}), 400
-    
-    return render_template('register.html')
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    """User login"""
-    if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
+        # Handle file upload
+        if 'file' in request.files and request.files['file'].filename:
+            file = request.files['file']
+            if not allowed_file(file.filename):
+                return jsonify({'error': 'Invalid file type'}), 400
+            
+            filename = secure_filename(file.filename)
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{job_id}_{filename}")
+            file.save(file_path)
+            source_type = 'file'
+            source_name = filename
         
+        # Handle URL
+        elif request.form.get('url'):
+            url = request.form.get('url')
+            # Download from URL (simplified - you might want to use yt-dlp for YouTube)
+            import requests
+            response = requests.get(url, stream=True)
+            filename = f"{job_id}_from_url.mp4"
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            with open(file_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            source_type = 'url'
+            source_name = url
+        
+        language = request.form.get('language', 'my')  # Default to Myanmar
+        
+        # Extract audio if video file
+        audio_path = None
+        if file_path.endswith(('.mp4', '.avi', '.mov', '.mkv')):
+            logger.info(f"Extracting audio from video: {file_path}")
+            video = VideoFileClip(file_path)
+            audio_path = os.path.join(app.config['AUDIO_FOLDER'], f"{job_id}_audio.wav")
+            video.audio.write_audiofile(audio_path, logger=None)
+            video.close()
+        else:
+            audio_path = file_path
+        
+        # Generate transcript using Whisper
+        logger.info(f"Generating transcript for: {audio_path}")
+        
+        # Load whisper model (you can choose different sizes: tiny, base, small, medium, large)
+        model = whisper.load_model("base")
+        
+        # Transcribe
+        result = model.transcribe(audio_path, language='my' if language == 'my' else None)
+        transcript = result["text"]
+        
+        logger.info(f"Transcript generated: {len(transcript)} characters")
+        
+        # Save transcript to database
+        transcript_id = str(uuid.uuid4())
         conn = sqlite3.connect('users.db')
         c = conn.cursor()
-        c.execute("SELECT * FROM users WHERE username = ?", (username,))
-        user = c.fetchone()
+        c.execute("INSERT INTO transcripts (id, user_id, filename, content, language, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                 (transcript_id, current_user.id, source_name, transcript, language, datetime.now()))
+        conn.commit()
         conn.close()
         
-        if user and check_password_hash(user[2], password):
-            user_obj = User(user[0], user[1], user[3])
-            login_user(user_obj)
-            return jsonify({'message': 'Login successful', 'redirect': '/'})
+        # Cleanup
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        if audio_path and audio_path != file_path and os.path.exists(audio_path):
+            os.remove(audio_path)
         
-        return jsonify({'error': 'Invalid username or password'}), 400
-    
-    return render_template('login.html')
-
-@app.route('/logout')
-@login_required
-def logout():
-    """User logout"""
-    logout_user()
-    return jsonify({'message': 'Logged out successfully'})
-
-@app.route('/current_user')
-def current_user_info():
-    """Get current user info"""
-    if current_user.is_authenticated:
         return jsonify({
-            'authenticated': True,
-            'username': current_user.username,
-            'email': current_user.email
+            'job_id': job_id,
+            'transcript_id': transcript_id,
+            'transcript': transcript,
+            'language': language,
+            'source': source_name
         })
-    return jsonify({'authenticated': False})
+        
+    except Exception as e:
+        logger.error(f"Transcript error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+# ==================== AI VOICE GENERATOR ====================
+
+@app.route('/voice', methods=['POST'])
+@login_required
+def generate_voice():
+    """Generate AI voice from text"""
+    try:
+        logger.info(f"Voice generation request from user {current_user.id}")
+        
+        text = request.form.get('text', '')
+        language = request.form.get('language', 'my')  # Default to Myanmar
+        voice_type = request.form.get('voice_type', 'female')  # female, male
+        
+        if not text:
+            return jsonify({'error': 'No text provided'}), 400
+        
+        if len(text) > 5000:
+            return jsonify({'error': 'Text too long (max 5000 characters)'}), 400
+        
+        job_id = str(uuid.uuid4())
+        
+        # Generate voice using gTTS
+        logger.info(f"Generating voice for text: {text[:50]}...")
+        
+        # For Myanmar, use 'my' language code
+        tts = gTTS(text=text, lang='my', slow=False)
+        
+        audio_filename = f"{job_id}_voice.mp3"
+        audio_path = os.path.join(app.config['AUDIO_FOLDER'], audio_filename)
+        tts.save(audio_path)
+        
+        logger.info(f"Voice saved to: {audio_path}")
+        
+        # Save to database
+        voice_id = str(uuid.uuid4())
+        conn = sqlite3.connect('users.db')
+        c = conn.cursor()
+        c.execute("INSERT INTO voices (id, user_id, text, audio_path, language, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                 (voice_id, current_user.id, text[:100], audio_path, language, datetime.now()))
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'job_id': job_id,
+            'voice_id': voice_id,
+            'audio_url': f"/audio/{os.path.basename(audio_path)}",
+            'text': text[:100] + ('...' if len(text) > 100 else ''),
+            'language': language
+        })
+        
+    except Exception as e:
+        logger.error(f"Voice generation error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/audio/<filename>')
+@login_required
+def get_audio(filename):
+    """Get generated audio file"""
+    audio_path = os.path.join(app.config['AUDIO_FOLDER'], filename)
+    if os.path.exists(audio_path):
+        return send_file(audio_path, mimetype='audio/mpeg')
+    return jsonify({'error': 'Audio not found'}), 404
+
+# ==================== TRANSCRIPT HISTORY ====================
+
+@app.route('/transcripts')
+@login_required
+def list_transcripts():
+    """List user's transcripts"""
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    c.execute("SELECT id, filename, content, language, created_at FROM transcripts WHERE user_id = ? ORDER BY created_at DESC LIMIT 20",
+              (current_user.id,))
+    transcripts = c.fetchall()
+    conn.close()
+    
+    return jsonify([{
+        'id': t[0],
+        'filename': t[1],
+        'content': t[2][:200] + ('...' if len(t[2]) > 200 else ''),
+        'language': t[3],
+        'created_at': t[4]
+    } for t in transcripts])
+
+@app.route('/transcript/<transcript_id>')
+@login_required
+def get_transcript(transcript_id):
+    """Get full transcript"""
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    c.execute("SELECT content FROM transcripts WHERE id = ? AND user_id = ?",
+              (transcript_id, current_user.id))
+    transcript = c.fetchone()
+    conn.close()
+    
+    if transcript:
+        return jsonify({'content': transcript[0]})
+    return jsonify({'error': 'Transcript not found'}), 404
+
+# ==================== VOICE HISTORY ====================
+
+@app.route('/voices')
+@login_required
+def list_voices():
+    """List user's generated voices"""
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    c.execute("SELECT id, text, language, created_at FROM voices WHERE user_id = ? ORDER BY created_at DESC LIMIT 20",
+              (current_user.id,))
+    voices = c.fetchall()
+    conn.close()
+    
+    return jsonify([{
+        'id': v[0],
+        'text': v[1],
+        'language': v[2],
+        'created_at': v[3]
+    } for v in voices])
+
+# ==================== CANCEL JOB ====================
+
+@app.route('/cancel/<job_id>', methods=['POST'])
+@login_required
+def cancel_job(job_id):
+    """Cancel a processing job"""
+    if job_id in active_jobs and active_jobs[job_id]['user_id'] == current_user.id:
+        job = active_jobs[job_id]
+        
+        if job['status'] in ['processing', 'queued']:
+            job['status'] = 'cancelled'
+            job['progress'] = 0
+            job['error'] = 'Job cancelled by user'
+            
+            logger.info(f"Job {job_id} cancelled by user {current_user.id}")
+            return jsonify({'success': True, 'message': 'Job cancelled'})
+        else:
+            return jsonify({'error': 'Job cannot be cancelled'}), 400
+    
+    return jsonify({'error': 'Job not found'}), 404
+
+# ==================== VIDEO EDITOR ROUTES ====================
 
 @app.route('/upload', methods=['POST'])
 @login_required
@@ -773,6 +918,7 @@ def upload_file():
             'glitch_intensity': request.form.get('glitch_intensity', '0.1'),
             
             'oldfilm_enabled': request.form.get('oldfilm_enabled', 'off'),
+            'scratch_intensity': request.form.get('scratch_intensity', '0.1'),
             
             'speed_enabled': request.form.get('speed_enabled', 'off'),
             'speed_factor': request.form.get('speed_factor', '1.5'),
@@ -790,7 +936,10 @@ def upload_file():
             
             'music_enabled': request.form.get('music_enabled', 'off'),
             'music_path': request.form.get('music_path', ''),
-            'music_volume': request.form.get('music_volume', '0.5')
+            'music_volume': request.form.get('music_volume', '0.5'),
+            
+            'noise_reduction': request.form.get('noise_reduction', 'off'),
+            'noise_strength': request.form.get('noise_strength', '0.5')
         }
         
         # Initialize job
@@ -877,23 +1026,76 @@ def list_jobs():
             })
     return jsonify(user_jobs)
 
-@app.route('/history')
-@login_required
-def job_history():
-    """Get user's job history from database"""
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-    c.execute("SELECT id, filename, status, created_at FROM jobs WHERE user_id = ? ORDER BY created_at DESC LIMIT 10",
-              (current_user.id,))
-    jobs = c.fetchall()
-    conn.close()
+@app.route('/')
+def index():
+    """Main page"""
+    return render_template('index.html', user=current_user if current_user.is_authenticated else None)
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    """User registration"""
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        email = request.form.get('email', '')
+        
+        if not username or not password:
+            return jsonify({'error': 'Username and password required'}), 400
+        
+        hashed_password = generate_password_hash(password)
+        
+        try:
+            conn = sqlite3.connect('users.db')
+            c = conn.cursor()
+            c.execute("INSERT INTO users (username, password, email, created_at) VALUES (?, ?, ?, ?)",
+                     (username, hashed_password, email, datetime.now()))
+            conn.commit()
+            conn.close()
+            return jsonify({'message': 'User created successfully'})
+        except sqlite3.IntegrityError:
+            return jsonify({'error': 'Username already exists'}), 400
     
-    return jsonify([{
-        'id': j[0],
-        'filename': j[1],
-        'status': j[2],
-        'created_at': j[3]
-    } for j in jobs])
+    return render_template('register.html')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """User login"""
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        conn = sqlite3.connect('users.db')
+        c = conn.cursor()
+        c.execute("SELECT * FROM users WHERE username = ?", (username,))
+        user = c.fetchone()
+        conn.close()
+        
+        if user and check_password_hash(user[2], password):
+            user_obj = User(user[0], user[1], user[3])
+            login_user(user_obj)
+            return jsonify({'message': 'Login successful', 'redirect': '/'})
+        
+        return jsonify({'error': 'Invalid username or password'}), 400
+    
+    return render_template('login.html')
+
+@app.route('/logout')
+@login_required
+def logout():
+    """User logout"""
+    logout_user()
+    return jsonify({'message': 'Logged out successfully'})
+
+@app.route('/current_user')
+def current_user_info():
+    """Get current user info"""
+    if current_user.is_authenticated:
+        return jsonify({
+            'authenticated': True,
+            'username': current_user.username,
+            'email': current_user.email
+        })
+    return jsonify({'authenticated': False})
 
 @app.route('/health')
 def health_check():
@@ -901,39 +1103,14 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'moviepy_loaded': 'moviepy' in sys.modules,
-        'pillow_loaded': 'PIL' in sys.modules
+        'pillow_loaded': 'PIL' in sys.modules,
+        'whisper_loaded': 'whisper' in sys.modules,
+        'gtts_loaded': 'gtts' in sys.modules
     })
 
 @app.errorhandler(413)
 def too_large(e):
-    return jsonify({'error': 'File too large. Maximum size is 10240MB'}), 413
-
-# ==================== CANCEL JOB ====================
-@app.route('/cancel/<job_id>', methods=['POST'])
-@login_required
-def cancel_job(job_id):
-    """Cancel a processing job"""
-    if job_id in active_jobs and active_jobs[job_id]['user_id'] == current_user.id:
-        job = active_jobs[job_id]
-        
-        # Only allow cancel if job is processing or queued
-        if job['status'] in ['processing', 'queued']:
-            job['status'] = 'cancelled'
-            job['progress'] = 0
-            job['error'] = 'Job cancelled by user'
-            
-            # Try to cleanup if possible
-            if 'thread' in job and job['thread'].is_alive():
-                # Can't forcefully kill thread, but mark as cancelled
-                pass
-            
-            logger.info(f"Job {job_id} cancelled by user {current_user.id}")
-            return jsonify({'success': True, 'message': 'Job cancelled'})
-        else:
-            return jsonify({'error': 'Job cannot be cancelled'}), 400
-    
-    return jsonify({'error': 'Job not found'}), 404
-
+    return jsonify({'error': 'File too large. Maximum size is 1GB'}), 413
 
 if __name__ == '__main__':
     print("\n" + "="*70)
@@ -941,6 +1118,8 @@ if __name__ == '__main__':
     print("="*70)
     print(f"📁 Upload folder: {app.config['UPLOAD_FOLDER']}")
     print(f"📁 Output folder: {app.config['OUTPUT_FOLDER']}")
+    print(f"📁 Audio folder: {app.config['AUDIO_FOLDER']}")
+    print(f"📁 Transcript folder: {app.config['TRANSCRIPT_FOLDER']}")
     print(f"🌐 URL: http://localhost:5555")
     print("="*70 + "\n")
     

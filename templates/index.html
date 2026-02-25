@@ -20,9 +20,26 @@
         <h1>AI Video Editor</h1>
         <p class="subtitle">Professional video editing with AI-powered effects</p>
         
+        <!-- Feature Selection Buttons -->
+        <div class="feature-selector">
+            <button class="feature-btn active" onclick="showFeature('editor')" id="btnEditor">
+                <span class="feature-icon">🎬</span>
+                <span class="feature-text">Video Editor</span>
+            </button>
+            <button class="feature-btn" onclick="showFeature('transcript')" id="btnTranscript">
+                <span class="feature-icon">📝</span>
+                <span class="feature-text">Transcript Generator</span>
+            </button>
+            <button class="feature-btn" onclick="showFeature('voice')" id="btnVoice">
+                <span class="feature-icon">🎤</span>
+                <span class="feature-text">AI Voice Generator</span>
+            </button>
+        </div>
+        
         <div class="main-content">
-            <!-- Left Panel - Upload & Settings -->
-            <div class="left-panel">
+            <!-- Left Panel - Upload & Settings (Hidden by default, shown when feature selected) -->
+            <div class="left-panel" id="editorPanel">
+                <!-- Video Editor Content - Same as before -->
                 <div class="upload-section">
                     <h2>📁 Upload Video</h2>
                     <div class="upload-area" id="uploadArea">
@@ -130,9 +147,6 @@
                                     <option value="4">၄ စက္ကန့်</option>
                                 </select>
                             </div>
-                            <div class="option-row hint">
-                                <small>ဥပမာ - ၇ စက္ကန့်တစ်ခါ ၂ စက္ကန့်ကြာ Zoom လုပ်မယ်</small>
-                            </div>
                         </div>
                     </div>
                     
@@ -168,9 +182,6 @@
                                     <option value="7">၇ စက္ကန့် တစ်ခါ</option>
                                     <option value="10">၁၀ စက္ကန့် တစ်ခါ</option>
                                 </select>
-                            </div>
-                            <div class="option-row hint">
-                                <small>ဥပမာ - ၅ စက္ကန့်တစ်ခါ ၁ စက္ကန့်ကြာ Freeze လုပ်မယ်</small>
                             </div>
                         </div>
                     </div>
@@ -396,9 +407,111 @@
                 </button>
             </div>
             
+            <!-- Transcript Generator Panel -->
+            <div class="left-panel hidden" id="transcriptPanel">
+                <h2>📝 Transcript Generator</h2>
+                <p class="panel-description">Generate Myanmar transcripts from video/audio files or URLs</p>
+                
+                <div class="upload-section">
+                    <h3>Upload File</h3>
+                    <div class="upload-area" id="transcriptUploadArea">
+                        <input type="file" id="transcriptFileInput" accept="video/*,audio/*" hidden>
+                        <div class="upload-content">
+                            <span class="upload-icon">📂</span>
+                            <p>Click or drag file to upload</p>
+                            <p class="small">MP4, AVI, MOV, MP3, WAV (Max 500MB)</p>
+                        </div>
+                    </div>
+                    <div id="transcriptFileInfo" class="file-info hidden">
+                        <p><strong>Selected:</strong> <span id="transcriptFileName"></span></p>
+                        <p><strong>Size:</strong> <span id="transcriptFileSize"></span></p>
+                    </div>
+                </div>
+                
+                <div class="or-divider">
+                    <span>OR</span>
+                </div>
+                
+                <div class="url-section">
+                    <h3>Enter URL</h3>
+                    <input type="url" id="transcriptUrl" class="form-control" placeholder="https://example.com/video.mp4">
+                </div>
+                
+                <div class="language-section">
+                    <h3>Language</h3>
+                    <select id="transcriptLanguage" class="form-control">
+                        <option value="my" selected>မြန်မာ (Myanmar)</option>
+                        <option value="en">English</option>
+                        <option value="th">ไทย (Thai)</option>
+                        <option value="zh">中文 (Chinese)</option>
+                    </select>
+                </div>
+                
+                <button class="process-btn" id="generateTranscriptBtn">
+                    <span>📝 Generate Transcript</span>
+                </button>
+                
+                <div class="transcript-result hidden" id="transcriptResult">
+                    <h3>Generated Transcript</h3>
+                    <div class="transcript-content" id="transcriptContent"></div>
+                    <div class="transcript-actions">
+                        <button class="copy-btn" onclick="copyTranscript()">📋 Copy to Clipboard</button>
+                        <button class="download-btn" onclick="downloadTranscript()">💾 Download</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- AI Voice Generator Panel -->
+            <div class="left-panel hidden" id="voicePanel">
+                <h2>🎤 AI Voice Generator</h2>
+                <p class="panel-description">Convert Myanmar text to natural-sounding AI voice</p>
+                
+                <div class="text-section">
+                    <h3>Enter Text</h3>
+                    <textarea id="voiceText" class="form-control" rows="5" placeholder="မြန်မာလိုရိုက်ထည့်ပါ... (ဥပမာ - မင်္ဂလာပါ)"></textarea>
+                    <div class="text-counter">
+                        <span id="textCount">0</span>/5000 characters
+                    </div>
+                </div>
+                
+                <div class="voice-settings">
+                    <h3>Voice Settings</h3>
+                    <div class="setting-group">
+                        <label>Language:</label>
+                        <select id="voiceLanguage" class="form-control">
+                            <option value="my" selected>မြန်မာ (Myanmar)</option>
+                            <option value="en">English</option>
+                            <option value="th">ไทย (Thai)</option>
+                        </select>
+                    </div>
+                    <div class="setting-group">
+                        <label>Voice Type:</label>
+                        <select id="voiceType" class="form-control">
+                            <option value="female" selected>အမျိုးသမီး (Female)</option>
+                            <option value="male">အမျိုးသား (Male)</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <button class="process-btn" id="generateVoiceBtn">
+                    <span>🎤 Generate Voice</span>
+                </button>
+                
+                <div class="voice-result hidden" id="voiceResult">
+                    <h3>Generated Voice</h3>
+                    <audio id="voiceAudio" controls class="voice-player">
+                        <source src="" type="audio/mpeg">
+                        Your browser does not support the audio element.
+                    </audio>
+                    <div class="voice-actions">
+                        <button class="download-btn" onclick="downloadVoice()">💾 Download Audio</button>
+                    </div>
+                </div>
+            </div>
+            
             <!-- Right Panel - Jobs & Progress -->
             <div class="right-panel">
-                <h2>📊 Processing Jobs</h2>
+                <h2>📊 Recent Jobs</h2>
                 <div id="jobsList" class="jobs-list">
                     <p class="no-jobs">No active jobs</p>
                 </div>
@@ -406,10 +519,10 @@
         </div>
     </div>
     
-    <!-- Progress Modal with Cancel Button -->
+    <!-- Progress Modal -->
     <div id="progressModal" class="modal hidden">
         <div class="modal-content">
-            <h3>Processing Video...</h3>
+            <h3 id="modalTitle">Processing...</h3>
             <div class="progress-bar">
                 <div id="progressFill" class="progress-fill" style="width: 0%"></div>
             </div>

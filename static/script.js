@@ -1,11 +1,13 @@
 // ========================================
 // AI Video Editor - Complete JavaScript
-// Includes: Upload, Progress, Effects, Dark Mode, Cancel Job
+// Includes: Video Editor, Transcript Generator, AI Voice Generator
 // ========================================
 
 // Global variables
 let currentJobId = null;
 let statusInterval = null;
+let currentTranscriptId = null;
+let currentVoiceId = null;
 
 document.addEventListener('DOMContentLoaded', function() {
     console.log('✅ DOM loaded - Initializing...');
@@ -18,13 +20,43 @@ document.addEventListener('DOMContentLoaded', function() {
     const fileSize = document.getElementById('fileSize');
     const processBtn = document.getElementById('processBtn');
     
+    // Transcript elements
+    const transcriptUploadArea = document.getElementById('transcriptUploadArea');
+    const transcriptFileInput = document.getElementById('transcriptFileInput');
+    const transcriptFileInfo = document.getElementById('transcriptFileInfo');
+    const transcriptFileName = document.getElementById('transcriptFileName');
+    const transcriptFileSize = document.getElementById('transcriptFileSize');
+    const transcriptUrl = document.getElementById('transcriptUrl');
+    const generateTranscriptBtn = document.getElementById('generateTranscriptBtn');
+    
+    // Voice elements
+    const voiceText = document.getElementById('voiceText');
+    const generateVoiceBtn = document.getElementById('generateVoiceBtn');
+    const textCount = document.getElementById('textCount');
+    
     // Check if elements exist
     if (!uploadArea || !videoInput) {
         console.error('Required elements not found!');
         return;
     }
     
-    // ========== UPLOAD AREA HANDLING ==========
+    // ========== FEATURE SELECTION ==========
+    window.showFeature = function(feature) {
+        // Update buttons
+        document.querySelectorAll('.feature-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        document.getElementById(`btn${feature.charAt(0).toUpperCase() + feature.slice(1)}`).classList.add('active');
+        
+        // Show selected panel
+        document.getElementById('editorPanel').classList.add('hidden');
+        document.getElementById('transcriptPanel').classList.add('hidden');
+        document.getElementById('voicePanel').classList.add('hidden');
+        
+        document.getElementById(`${feature}Panel`).classList.remove('hidden');
+    };
+    
+    // ========== VIDEO EDITOR UPLOAD ==========
     
     // Click to upload
     uploadArea.addEventListener('click', () => {
@@ -82,12 +114,67 @@ document.addEventListener('DOMContentLoaded', function() {
         return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
     }
     
+    // ========== TRANSCRIPT UPLOAD ==========
+    
+    if (transcriptUploadArea) {
+        transcriptUploadArea.addEventListener('click', () => {
+            transcriptFileInput.click();
+        });
+        
+        transcriptUploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            transcriptUploadArea.classList.add('dragover');
+        });
+        
+        transcriptUploadArea.addEventListener('dragleave', () => {
+            transcriptUploadArea.classList.remove('dragover');
+        });
+        
+        transcriptUploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            transcriptUploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                transcriptFileInput.files = files;
+                handleTranscriptFileSelect(files[0]);
+            }
+        });
+    }
+    
+    if (transcriptFileInput) {
+        transcriptFileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleTranscriptFileSelect(e.target.files[0]);
+            }
+        });
+    }
+    
+    function handleTranscriptFileSelect(file) {
+        if (transcriptFileInfo) transcriptFileInfo.classList.remove('hidden');
+        if (transcriptFileName) transcriptFileName.textContent = file.name;
+        if (transcriptFileSize) transcriptFileSize.textContent = formatFileSize(file.size);
+        console.log('Transcript file accepted:', file.name);
+    }
+    
+    // ========== VOICE TEXT COUNTER ==========
+    
+    if (voiceText && textCount) {
+        voiceText.addEventListener('input', function() {
+            const count = this.value.length;
+            textCount.textContent = count;
+            
+            if (count > 5000) {
+                this.value = this.value.substring(0, 5000);
+                textCount.textContent = 5000;
+            }
+        });
+    }
+    
     // ========== EFFECT TOGGLES ==========
     
     // Toggle effect options when clicking on header
     document.querySelectorAll('.effect-header').forEach(header => {
         header.addEventListener('click', function(e) {
-            // Don't toggle if clicking on checkbox
             if (e.target.type !== 'checkbox') {
                 const options = this.nextElementSibling;
                 if (options) {
@@ -133,78 +220,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Blur enabled checkbox
-    const blurEnabled = document.getElementById('blurEnabled');
-    if (blurEnabled) {
-        blurEnabled.addEventListener('change', function() {
-            const options = document.getElementById('blurOptions');
-            if (options) options.classList.toggle('hidden', !this.checked);
-        });
-    }
-    
-    // Glitch enabled checkbox
-    const glitchEnabled = document.getElementById('glitchEnabled');
-    if (glitchEnabled) {
-        glitchEnabled.addEventListener('change', function() {
-            const options = document.getElementById('glitchOptions');
-            if (options) options.classList.toggle('hidden', !this.checked);
-        });
-    }
-    
-    // Old film enabled checkbox
-    const oldfilmEnabled = document.getElementById('oldfilmEnabled');
-    if (oldfilmEnabled) {
-        oldfilmEnabled.addEventListener('change', function() {
-            const options = document.getElementById('oldfilmOptions');
-            if (options) options.classList.toggle('hidden', !this.checked);
-        });
-    }
-    
-    // Speed enabled checkbox
-    const speedEnabled = document.getElementById('speedEnabled');
-    if (speedEnabled) {
-        speedEnabled.addEventListener('change', function() {
-            const options = document.getElementById('speedOptions');
-            if (options) options.classList.toggle('hidden', !this.checked);
-        });
-    }
-    
-    // Noise reduction checkbox
-    const noiseReduction = document.getElementById('noiseReduction');
-    if (noiseReduction) {
-        noiseReduction.addEventListener('change', function() {
-            const options = document.getElementById('noiseOptions');
-            if (options) options.classList.toggle('hidden', !this.checked);
-        });
-    }
-    
-    // Text enabled checkbox
-    const textEnabled = document.getElementById('textEnabled');
-    if (textEnabled) {
-        textEnabled.addEventListener('change', function() {
-            const options = document.getElementById('textOptions');
-            if (options) options.classList.toggle('hidden', !this.checked);
-        });
-    }
-    
-    // Transition enabled checkbox
-    const transitionEnabled = document.getElementById('transitionEnabled');
-    if (transitionEnabled) {
-        transitionEnabled.addEventListener('change', function() {
-            const options = document.getElementById('transitionOptions');
-            if (options) options.classList.toggle('hidden', !this.checked);
-        });
-    }
-    
-    // Music enabled checkbox
-    const musicEnabled = document.getElementById('musicEnabled');
-    if (musicEnabled) {
-        musicEnabled.addEventListener('change', function() {
-            const options = document.getElementById('musicOptions');
-            if (options) options.classList.toggle('hidden', !this.checked);
-        });
-    }
-    
     // ========== RANGE INPUT DISPLAYS ==========
     
     // Zoom factor display
@@ -225,64 +240,18 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Glitch intensity display
-    const glitchIntensity = document.getElementById('glitchIntensity');
-    const glitchValue = document.getElementById('glitchValue');
-    if (glitchIntensity && glitchValue) {
-        glitchIntensity.addEventListener('input', function() {
-            glitchValue.textContent = this.value;
-        });
-    }
-    
-    // Scratch intensity display
-    const scratchIntensity = document.getElementById('scratchIntensity');
-    const scratchValue = document.getElementById('scratchValue');
-    if (scratchIntensity && scratchValue) {
-        scratchIntensity.addEventListener('input', function() {
-            scratchValue.textContent = this.value;
-        });
-    }
-    
-    // Speed factor display
-    const speedFactor = document.getElementById('speedFactor');
-    const speedValue = document.getElementById('speedValue');
-    if (speedFactor && speedValue) {
-        speedFactor.addEventListener('input', function() {
-            speedValue.textContent = this.value + 'x';
-        });
-    }
-    
-    // Noise strength display
-    const noiseStrength = document.getElementById('noiseStrength');
-    const noiseValue = document.getElementById('noiseValue');
-    if (noiseStrength && noiseValue) {
-        noiseStrength.addEventListener('input', function() {
-            noiseValue.textContent = this.value;
-        });
-    }
-    
-    // Text size display
-    const textSize = document.getElementById('textSize');
-    const textSizeValue = document.getElementById('textSizeValue');
-    if (textSize && textSizeValue) {
-        textSize.addEventListener('input', function() {
-            textSizeValue.textContent = this.value;
-        });
-    }
-    
-    // Music volume display
-    const musicVolume = document.getElementById('musicVolume');
-    const musicVolumeValue = document.getElementById('musicVolumeValue');
-    if (musicVolume && musicVolumeValue) {
-        musicVolume.addEventListener('input', function() {
-            musicVolumeValue.textContent = Math.round(this.value * 100) + '%';
-        });
-    }
-    
-    // ========== PROCESS BUTTON ==========
+    // ========== PROCESS BUTTONS ==========
     
     if (processBtn) {
         processBtn.addEventListener('click', uploadVideo);
+    }
+    
+    if (generateTranscriptBtn) {
+        generateTranscriptBtn.addEventListener('click', generateTranscript);
+    }
+    
+    if (generateVoiceBtn) {
+        generateVoiceBtn.addEventListener('click', generateVoice);
     }
     
     // ========== CLOSE MODAL BUTTON ==========
@@ -311,7 +280,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // ========== LOAD JOBS ==========
     
     loadJobs();
-    setInterval(loadJobs, 3000); // Refresh every 3 seconds
+    setInterval(loadJobs, 3000);
 });
 
 // ========== CHECK LOGIN STATUS ==========
@@ -334,6 +303,11 @@ async function checkLoginStatus() {
                 <a href="/login" class="auth-link">Login</a>
                 <a href="/register" class="auth-link">Register</a>
             `;
+            
+            // Hide panels if not logged in
+            document.getElementById('editorPanel').classList.add('hidden');
+            document.getElementById('transcriptPanel').classList.add('hidden');
+            document.getElementById('voicePanel').classList.add('hidden');
         }
     } catch (error) {
         console.error('Failed to check login status:', error);
@@ -343,7 +317,6 @@ async function checkLoginStatus() {
 async function logout() {
     try {
         const response = await fetch('/logout');
-        const data = await response.json();
         if (response.ok) {
             window.location.reload();
         }
@@ -352,78 +325,7 @@ async function logout() {
     }
 }
 
-// ========== CANCEL JOB ==========
-
-async function cancelJob(jobId) {
-    if (!confirm('Are you sure you want to cancel this job?')) {
-        return;
-    }
-    
-    try {
-        const response = await fetch(`/cancel/${jobId}`, {
-            method: 'POST'
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            alert('Job cancelled successfully');
-            
-            // Clear status check interval
-            if (statusInterval) {
-                clearInterval(statusInterval);
-                statusInterval = null;
-            }
-            
-            // Hide progress modal
-            hideProgressModal();
-            
-            // Enable buttons
-            setButtonsEnabled(true);
-            
-            // Reload jobs list
-            loadJobs();
-        } else {
-            alert('Error: ' + (data.error || 'Failed to cancel job'));
-        }
-    } catch (error) {
-        console.error('Cancel error:', error);
-        alert('Failed to cancel job: ' + error.message);
-    }
-}
-
-// ========== DISABLE/ENABLE BUTTONS ==========
-
-function setButtonsEnabled(enabled) {
-    const processBtn = document.getElementById('processBtn');
-    const effectCheckboxes = document.querySelectorAll('.effect-header input[type="checkbox"]');
-    const settingControls = document.querySelectorAll('.setting-group select, .setting-group input');
-    const uploadArea = document.getElementById('uploadArea');
-    
-    if (processBtn) {
-        processBtn.disabled = !enabled;
-    }
-    
-    effectCheckboxes.forEach(checkbox => {
-        checkbox.disabled = !enabled;
-    });
-    
-    settingControls.forEach(control => {
-        control.disabled = !enabled;
-    });
-    
-    if (uploadArea) {
-        if (enabled) {
-            uploadArea.style.opacity = '1';
-            uploadArea.style.pointerEvents = 'auto';
-        } else {
-            uploadArea.style.opacity = '0.5';
-            uploadArea.style.pointerEvents = 'none';
-        }
-    }
-}
-
-// ========== UPLOAD VIDEO ==========
+// ========== VIDEO EDITOR FUNCTIONS ==========
 
 async function uploadVideo() {
     console.log('uploadVideo function called');
@@ -443,14 +345,11 @@ async function uploadVideo() {
     
     console.log('Uploading file:', file.name);
     
-    // Show progress modal
-    showProgressModal();
+    showProgressModal('Processing Video...');
     
-    // Create form data
     const formData = new FormData();
     formData.append('video', file);
     
-    // Get all form values safely
     const getValue = (id, defaultValue) => {
         const el = document.getElementById(id);
         return el ? el.value : defaultValue;
@@ -537,20 +436,16 @@ async function uploadVideo() {
     formData.append('music_volume', getRangeValue('musicVolume', '0.5'));
     
     try {
-        console.log('Sending fetch request to /upload');
         const response = await fetch('/upload', {
             method: 'POST',
             body: formData
         });
         
-        console.log('Response status:', response.status);
         const data = await response.json();
-        console.log('Response data:', data);
         
         if (response.ok) {
             currentJobId = data.job_id;
             
-            // Store job ID in cancel button
             const cancelBtn = document.getElementById('cancelJobBtn');
             if (cancelBtn) {
                 cancelBtn.setAttribute('data-job-id', currentJobId);
@@ -569,11 +464,169 @@ async function uploadVideo() {
     }
 }
 
+// ========== TRANSCRIPT GENERATOR ==========
+
+async function generateTranscript() {
+    console.log('generateTranscript function called');
+    
+    const fileInput = document.getElementById('transcriptFileInput');
+    const urlInput = document.getElementById('transcriptUrl');
+    const language = document.getElementById('transcriptLanguage').value;
+    
+    if (!fileInput.files[0] && !urlInput.value) {
+        alert('Please select a file or enter a URL');
+        return;
+    }
+    
+    showProgressModal('Generating Transcript...');
+    
+    const formData = new FormData();
+    
+    if (fileInput.files[0]) {
+        formData.append('file', fileInput.files[0]);
+    }
+    
+    if (urlInput.value) {
+        formData.append('url', urlInput.value);
+    }
+    
+    formData.append('language', language);
+    
+    try {
+        const response = await fetch('/transcript', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            hideProgressModal();
+            
+            // Show transcript result
+            const transcriptResult = document.getElementById('transcriptResult');
+            const transcriptContent = document.getElementById('transcriptContent');
+            
+            transcriptResult.classList.remove('hidden');
+            transcriptContent.textContent = data.transcript;
+            currentTranscriptId = data.transcript_id;
+            
+            // Add to jobs list
+            loadJobs();
+        } else {
+            hideProgressModal();
+            alert('Error: ' + (data.error || 'Unknown error'));
+        }
+    } catch (error) {
+        console.error('Transcript error:', error);
+        hideProgressModal();
+        alert('Transcript generation failed: ' + error.message);
+    }
+}
+
+// ========== VOICE GENERATOR ==========
+
+async function generateVoice() {
+    console.log('generateVoice function called');
+    
+    const text = document.getElementById('voiceText').value;
+    const language = document.getElementById('voiceLanguage').value;
+    const voiceType = document.getElementById('voiceType').value;
+    
+    if (!text) {
+        alert('Please enter some text');
+        return;
+    }
+    
+    if (text.length > 5000) {
+        alert('Text is too long (max 5000 characters)');
+        return;
+    }
+    
+    showProgressModal('Generating Voice...');
+    
+    const formData = new FormData();
+    formData.append('text', text);
+    formData.append('language', language);
+    formData.append('voice_type', voiceType);
+    
+    try {
+        const response = await fetch('/voice', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            hideProgressModal();
+            
+            // Show voice result
+            const voiceResult = document.getElementById('voiceResult');
+            const voiceAudio = document.getElementById('voiceAudio');
+            
+            voiceResult.classList.remove('hidden');
+            voiceAudio.src = data.audio_url;
+            voiceAudio.load();
+            currentVoiceId = data.voice_id;
+            
+            // Add to jobs list
+            loadJobs();
+        } else {
+            hideProgressModal();
+            alert('Error: ' + (data.error || 'Unknown error'));
+        }
+    } catch (error) {
+        console.error('Voice error:', error);
+        hideProgressModal();
+        alert('Voice generation failed: ' + error.message);
+    }
+}
+
+// ========== TRANSCRIPT ACTIONS ==========
+
+window.copyTranscript = function() {
+    const content = document.getElementById('transcriptContent').textContent;
+    navigator.clipboard.writeText(content).then(() => {
+        alert('Transcript copied to clipboard!');
+    }).catch(err => {
+        console.error('Copy failed:', err);
+    });
+};
+
+window.downloadTranscript = function() {
+    const content = document.getElementById('transcriptContent').textContent;
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `transcript_${new Date().toISOString().slice(0,10)}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+};
+
+// ========== VOICE ACTIONS ==========
+
+window.downloadVoice = function() {
+    const audio = document.getElementById('voiceAudio');
+    if (audio.src) {
+        const a = document.createElement('a');
+        a.href = audio.src;
+        a.download = `voice_${new Date().toISOString().slice(0,10)}.mp3`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+};
+
 // ========== PROGRESS MODAL FUNCTIONS ==========
 
-function showProgressModal() {
+function showProgressModal(title = 'Processing...') {
     console.log('Showing progress modal');
     const modal = document.getElementById('progressModal');
+    const modalTitle = document.getElementById('modalTitle');
     const fill = document.getElementById('progressFill');
     const text = document.getElementById('progressText');
     const status = document.getElementById('progressStatus');
@@ -582,19 +635,17 @@ function showProgressModal() {
     
     if (modal) {
         modal.classList.remove('hidden');
+        if (modalTitle) modalTitle.textContent = title;
         if (fill) fill.style.width = '0%';
         if (text) text.textContent = '0%';
-        if (status) status.textContent = 'Processing...';
+        if (status) status.textContent = 'Starting...';
         if (closeBtn) closeBtn.classList.add('hidden');
         if (cancelBtn) {
             cancelBtn.classList.remove('hidden');
             cancelBtn.disabled = false;
         }
         
-        // Disable buttons during processing
         setButtonsEnabled(false);
-    } else {
-        console.error('Progress modal not found');
     }
 }
 
@@ -617,10 +668,8 @@ function hideProgressModal() {
         closeBtn.classList.add('hidden');
     }
     
-    // Enable buttons
     setButtonsEnabled(true);
     
-    // Clear status check interval
     if (statusInterval) {
         clearInterval(statusInterval);
         statusInterval = null;
@@ -636,6 +685,62 @@ function updateProgress(progress, statusText) {
     if (fill) fill.style.width = progress + '%';
     if (text) text.textContent = progress + '%';
     if (statusEl) statusEl.textContent = statusText;
+}
+
+// ========== CANCEL JOB ==========
+
+async function cancelJob(jobId) {
+    if (!confirm('Are you sure you want to cancel this job?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/cancel/${jobId}`, {
+            method: 'POST'
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            alert('Job cancelled successfully');
+            
+            if (statusInterval) {
+                clearInterval(statusInterval);
+                statusInterval = null;
+            }
+            
+            hideProgressModal();
+            setButtonsEnabled(true);
+            loadJobs();
+        } else {
+            alert('Error: ' + (data.error || 'Failed to cancel job'));
+        }
+    } catch (error) {
+        console.error('Cancel error:', error);
+        alert('Failed to cancel job: ' + error.message);
+    }
+}
+
+// ========== DISABLE/ENABLE BUTTONS ==========
+
+function setButtonsEnabled(enabled) {
+    const processBtn = document.getElementById('processBtn');
+    const generateTranscriptBtn = document.getElementById('generateTranscriptBtn');
+    const generateVoiceBtn = document.getElementById('generateVoiceBtn');
+    const effectCheckboxes = document.querySelectorAll('.effect-header input[type="checkbox"]');
+    const settingControls = document.querySelectorAll('.setting-group select, .setting-group input');
+    
+    if (processBtn) processBtn.disabled = !enabled;
+    if (generateTranscriptBtn) generateTranscriptBtn.disabled = !enabled;
+    if (generateVoiceBtn) generateVoiceBtn.disabled = !enabled;
+    
+    effectCheckboxes.forEach(checkbox => {
+        checkbox.disabled = !enabled;
+    });
+    
+    settingControls.forEach(control => {
+        control.disabled = !enabled;
+    });
 }
 
 // ========== STATUS CHECK ==========
@@ -662,19 +767,10 @@ function startStatusCheck(jobId) {
                 document.getElementById('closeModalBtn').classList.remove('hidden');
                 document.getElementById('cancelJobBtn').classList.add('hidden');
                 
-                // Enable buttons
                 setButtonsEnabled(true);
-                
                 loadJobs();
                 
-                // Show preview and download options
-                if (data.preview_url) {
-                    setTimeout(() => {
-                        if (confirm('Video completed! Would you like to preview it?')) {
-                            window.open(data.preview_url, '_blank');
-                        }
-                    }, 500);
-                } else if (data.output_url) {
+                if (data.output_url) {
                     setTimeout(() => {
                         if (confirm('Download edited video?')) {
                             window.location.href = data.output_url;
@@ -688,7 +784,6 @@ function startStatusCheck(jobId) {
                 document.getElementById('closeModalBtn').classList.remove('hidden');
                 document.getElementById('cancelJobBtn').classList.add('hidden');
                 
-                // Enable buttons
                 setButtonsEnabled(true);
             } else if (data.status === 'cancelled') {
                 console.log('Job cancelled');
@@ -697,9 +792,7 @@ function startStatusCheck(jobId) {
                 document.getElementById('closeModalBtn').classList.remove('hidden');
                 document.getElementById('cancelJobBtn').classList.add('hidden');
                 
-                // Enable buttons
                 setButtonsEnabled(true);
-                
                 loadJobs();
             }
         } catch (error) {
@@ -760,6 +853,7 @@ function displayJobs(jobs) {
                 <div class="job-actions">
                     ${actions}
                 </div>
+                <div class="job-time">${job.created_at || ''}</div>
             </div>
         `;
     });
