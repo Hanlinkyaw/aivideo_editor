@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-AI Video Editor Web App - Complete Version with Authentication, Effects, Dark Mode
+AI Video Editor Web App - Complete Edition
+For MacBook Pro
 """
 
 import os
@@ -11,7 +12,6 @@ import threading
 import time
 import traceback
 import sqlite3
-import json
 from datetime import datetime
 from functools import wraps
 
@@ -21,8 +21,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 import numpy as np
 
-
-# MoviePy imports - မူလအတိုင်း ပြန်သုံးထားတယ်
+# MoviePy imports
 try:
     from moviepy.editor import VideoFileClip, CompositeVideoClip, ImageClip, TextClip
     from moviepy.editor import concatenate_videoclips, AudioFileClip, CompositeAudioClip
@@ -30,7 +29,6 @@ try:
     print("✅ MoviePy imported successfully")
 except ImportError as e:
     print(f"❌ MoviePy import error: {e}")
-    print("Please run: pip install moviepy")
     sys.exit(1)
 
 # PIL for image processing
@@ -39,18 +37,10 @@ try:
     print("✅ Pillow imported successfully")
 except ImportError as e:
     print(f"❌ Pillow import error: {e}")
-    print("Please run: pip install pillow")
     sys.exit(1)
 
-
 # Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
-)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
@@ -58,20 +48,17 @@ app = Flask(__name__)
 # Configuration
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
 app.config['OUTPUT_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'outputs')
-app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024 * 1024  # 1024MB  max
+app.config['PREVIEW_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'previews')
+app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB max
 app.config['ALLOWED_EXTENSIONS'] = {'mp4', 'avi', 'mov', 'mkv', 'flv', 'wmv'}
 app.config['SECRET_KEY'] = 'video-editor-secret-key-change-this-in-production'
 
 # Create folders if not exist
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['OUTPUT_FOLDER'], exist_ok=True)
+os.makedirs(app.config['PREVIEW_FOLDER'], exist_ok=True)
 
-# Login Manager Setup
-login_manager = LoginManager()
-login_manager.init_app(app)
-login_manager.login_view = 'login'
-
-# Database setup
+# ==================== DATABASE SETUP ====================
 def init_db():
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
@@ -81,19 +68,16 @@ def init_db():
                   password TEXT,
                   email TEXT,
                   created_at TIMESTAMP)''')
-    
-    c.execute('''CREATE TABLE IF NOT EXISTS jobs
-                 (id TEXT PRIMARY KEY,
-                  user_id INTEGER,
-                  filename TEXT,
-                  status TEXT,
-                  created_at TIMESTAMP,
-                  output_path TEXT,
-                  FOREIGN KEY (user_id) REFERENCES users (id))''')
     conn.commit()
     conn.close()
 
 init_db()
+
+# ==================== FLASK-LOGIN SETUP ====================
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+login_manager.login_message = 'Please log in to access this page.'
 
 class User(UserMixin):
     def __init__(self, id, username, email):
@@ -112,14 +96,36 @@ def load_user(user_id):
         return User(user[0], user[1], user[3])
     return None
 
-# Store active jobs in memory
+# ==================== STORE JOBS ====================
 active_jobs = {}
 
 def allowed_file(filename):
-    """Check if file extension is allowed"""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
-# ==================== NEW TIMED EFFECT FUNCTIONS ====================
+# ==================== EFFECT FUNCTIONS ====================
+
+def zoom_effect(clip, zoom_factor=1.5, zoom_type='in'):
+    """Original Zoom In/Out Effect"""
+    def fl(im):
+        h, w = im.shape[:2]
+        if zoom_type == 'in':
+            new_h, new_w = int(h / zoom_factor), int(w / zoom_factor)
+            y_start = (h - new_h) // 2
+            x_start = (w - new_w) // 2
+            cropped = im[y_start:y_start+new_h, x_start:x_start+new_w]
+            pil_img = Image.fromarray(cropped)
+            zoomed = np.array(pil_img.resize((w, h), Image.Resampling.LANCZOS))
+            return zoomed
+        else:
+            new_h, new_w = int(h * zoom_factor), int(w * zoom_factor)
+            pil_img = Image.fromarray(im)
+            shrunk = np.array(pil_img.resize((new_w, new_h), Image.Resampling.LANCZOS))
+            zoomed = np.zeros((h, w, 3), dtype=np.uint8)
+            y_start = (h - new_h) // 2
+            x_start = (w - new_w) // 2
+            zoomed[y_start:y_start+new_h, x_start:x_start+new_w] = shrunk
+            return zoomed
+    return clip.fl_image(fl)
 
 def zoom_effect_timed(clip, zoom_factor=1.5, zoom_type='in', interval=7, zoom_duration=2):
     """
@@ -127,11 +133,7 @@ def zoom_effect_timed(clip, zoom_factor=1.5, zoom_type='in', interval=7, zoom_du
     - interval: ဘယ်နှစ်စက္ကန့်တစ်ခါ လုပ်မလဲ (ဥပမာ ၇ စက္ကန့်)
     - zoom_duration: zoom လုပ်တဲ့ကြာချိန် (ဥပမာ ၂ စက္ကန့်)
     """
-    def make_frame(gf, t):
-        """
-        gf: get_frame function
-        t: time
-        """
+    def make_frame(t):
         # Calculate which cycle we're in
         cycle_time = t % interval
         
@@ -149,8 +151,8 @@ def zoom_effect_timed(clip, zoom_factor=1.5, zoom_type='in', interval=7, zoom_du
             # Normal phase (no zoom)
             current_zoom = 1.0
         
-        # Get frame at time t using gf
-        frame = gf(t)
+        # Get frame at time t
+        frame = clip.get_frame(t)
         h, w = frame.shape[:2]
         
         if current_zoom > 1:
@@ -162,14 +164,30 @@ def zoom_effect_timed(clip, zoom_factor=1.5, zoom_type='in', interval=7, zoom_du
             pil_img = Image.fromarray(cropped)
             zoomed = np.array(pil_img.resize((w, h), Image.Resampling.LANCZOS))
             return zoomed
+        elif current_zoom < 1:
+            # Zoom out (shrink and pad)
+            new_h, new_w = int(h * current_zoom), int(w * current_zoom)
+            pil_img = Image.fromarray(frame)
+            shrunk = np.array(pil_img.resize((new_w, new_h), Image.Resampling.LANCZOS))
+            zoomed = np.zeros((h, w, 3), dtype=np.uint8)
+            y_start = (h - new_h) // 2
+            x_start = (w - new_w) // 2
+            zoomed[y_start:y_start+new_h, x_start:x_start+new_w] = shrunk
+            return zoomed
         else:
-            # No zoom
             return frame
     
-    # Return clip with the effect applied
     return clip.fl(make_frame)
 
-
+def freeze_effect(clip, freeze_duration=1):
+    """Original Freeze Effect (freeze at the end)"""
+    if clip.duration <= freeze_duration:
+        return clip
+    freeze_time = clip.duration - freeze_duration
+    freeze_frame = clip.to_ImageClip(freeze_time)
+    freeze_frame = freeze_frame.set_duration(freeze_duration)
+    main_part = clip.subclip(0, freeze_time)
+    return CompositeVideoClip([main_part, freeze_frame.set_start(main_part.duration)])
 
 def freeze_effect_timed(clip, freeze_duration=1, interval=5):
     """
@@ -177,11 +195,7 @@ def freeze_effect_timed(clip, freeze_duration=1, interval=5):
     - interval: ဘယ်နှစ်စက္ကန့်တစ်ခါ freeze လုပ်မလဲ
     - freeze_duration: freeze လုပ်တဲ့ကြာချိန်
     """
-    def make_frame(gf, t):
-        """
-        gf: get_frame function
-        t: time
-        """
+    def make_frame(t):
         # Calculate which segment we're in
         segment = int(t // interval)
         segment_start = segment * interval
@@ -189,68 +203,15 @@ def freeze_effect_timed(clip, freeze_duration=1, interval=5):
         freeze_start = segment_end - freeze_duration
         
         if t >= freeze_start and t < segment_end:
-            # Freeze phase - return the frame from the start of freeze
-            return gf(freeze_start)
+            # Freeze phase
+            return clip.get_frame(freeze_start)
         else:
-            # Normal phase
-            return gf(t)
+            return clip.get_frame(t)
     
-    # Return clip with the effect applied
     return clip.fl(make_frame)
 
-
-
-
-
-
-# ==================== ORIGINAL EFFECT FUNCTIONS ====================
-
-def zoom_effect(clip, zoom_factor=1.5, zoom_type='in'):
-    """Zoom In/Out Effect using PIL"""
-    logger.debug(f"Applying zoom effect: {zoom_type} {zoom_factor}")
-    
-    def fl(im):
-        h, w = im.shape[:2]
-        
-        if zoom_type == 'in':
-            new_h, new_w = int(h / zoom_factor), int(w / zoom_factor)
-            y_start = (h - new_h) // 2
-            x_start = (w - new_w) // 2
-            cropped = im[y_start:y_start+new_h, x_start:x_start+new_w]
-            pil_img = Image.fromarray(cropped)
-            zoomed = np.array(pil_img.resize((w, h), Image.Resampling.LANCZOS))
-        else:
-            new_h, new_w = int(h * zoom_factor), int(w * zoom_factor)
-            pil_img = Image.fromarray(im)
-            shrunk = np.array(pil_img.resize((new_w, new_h), Image.Resampling.LANCZOS))
-            
-            zoomed = np.zeros((h, w, 3), dtype=np.uint8)
-            y_start = (h - new_h) // 2
-            x_start = (w - new_w) // 2
-            zoomed[y_start:y_start+new_h, x_start:x_start+new_w] = shrunk
-        
-        return zoomed
-    
-    return clip.fl_image(fl)
-
-def freeze_effect(clip, freeze_duration=1):
-    """Freeze Effect - freeze last frame"""
-    logger.debug(f"Applying freeze effect: {freeze_duration}s")
-    
-    if clip.duration <= freeze_duration:
-        return clip
-    
-    freeze_time = clip.duration - freeze_duration
-    freeze_frame = clip.to_ImageClip(freeze_time)
-    freeze_frame = freeze_frame.set_duration(freeze_duration)
-    main_part = clip.subclip(0, freeze_time)
-    
-    return CompositeVideoClip([main_part, freeze_frame.set_start(main_part.duration)])
-
 def mirror_effect(clip, mirror_type='horizontal'):
-    """Mirror Effect"""
-    logger.debug(f"Applying mirror effect: {mirror_type}")
-    
+    """Mirror effect"""
     def fl(im):
         if mirror_type == 'horizontal':
             return np.fliplr(im)
@@ -259,9 +220,7 @@ def mirror_effect(clip, mirror_type='horizontal'):
     return clip.fl_image(fl)
 
 def rotate_effect(clip, angle=90):
-    """Rotate Effect"""
-    logger.debug(f"Applying rotate effect: {angle}°")
-    
+    """Rotate effect"""
     def fl(im):
         pil_img = Image.fromarray(im)
         rotated = np.array(pil_img.rotate(angle, expand=True))
@@ -269,114 +228,110 @@ def rotate_effect(clip, angle=90):
     return clip.fl_image(fl)
 
 def blur_effect(clip, blur_radius=5):
-    """Gaussian Blur Effect"""
-    logger.debug(f"Applying blur effect: {blur_radius}")
-    
+    """Gaussian blur"""
     def fl(im):
         pil_img = Image.fromarray(im)
         blurred = pil_img.filter(ImageFilter.GaussianBlur(radius=blur_radius))
         return np.array(blurred)
-    
     return clip.fl_image(fl)
 
 def glitch_effect(clip, intensity=0.1):
-    """Glitch/RGB Shift Effect"""
-    logger.debug(f"Applying glitch effect: {intensity}")
-    
+    """RGB shift glitch"""
     def fl(im):
         h, w = im.shape[:2]
         shift = int(w * intensity)
-        
         r = im[:, :, 0]
         g = im[:, :, 1]
         b = im[:, :, 2]
-        
         r_shifted = np.roll(r, shift, axis=1)
         b_shifted = np.roll(b, -shift, axis=1)
-        
         glitched = np.stack([r_shifted, g, b_shifted], axis=2)
         return np.clip(glitched, 0, 255).astype(np.uint8)
-    
     return clip.fl_image(fl)
 
 def old_film_effect(clip, scratch_intensity=0.1):
-    """Old Film Effect with scratches and flicker"""
-    logger.debug(f"Applying old film effect")
-    
+    """Old film with scratches"""
     def fl(im, t):
         h, w = im.shape[:2]
-        
-        # Sepia
         sepia_filter = np.array([[0.393, 0.769, 0.189],
                                  [0.349, 0.686, 0.168],
                                  [0.272, 0.534, 0.131]])
         sepia = im @ sepia_filter.T
         sepia = np.clip(sepia, 0, 255).astype(np.uint8)
-        
-        # Scratches
         if np.random.random() < scratch_intensity:
             scratch_y = np.random.randint(0, h)
             scratch_height = np.random.randint(1, 5)
             sepia[scratch_y:scratch_y+scratch_height, :] = 255
-        
-        # Flicker
         flicker = 0.8 + 0.4 * np.random.random()
         sepia = (sepia * flicker).astype(np.uint8)
-        
         return sepia
-    
     return clip.fl(fl)
 
 def speed_effect(clip, factor=1.5, speed_type='fast'):
-    """Speed up or slow down effect"""
-    logger.debug(f"Applying speed effect: {speed_type} {factor}x")
-    
+    """Speed up/down"""
     if speed_type == 'fast':
         return clip.fx(speedx, factor)
     else:
         return clip.fx(speedx, 1/factor)
 
 def text_effect(clip, text, font_path=None, font_size=40, color='white', position='center'):
-    """Add text overlay to video with Myanmar font support"""
-    logger.debug(f"Adding text: {text}")
-    
-    # Create text clip
-    if font_path and os.path.exists(font_path):
-        try:
-            txt_clip = TextClip(text, fontsize=font_size, color=color, font=font_path)
-        except:
-            txt_clip = TextClip(text, fontsize=font_size, color=color)
-    else:
-        txt_clip = TextClip(text, fontsize=font_size, color=color)
-    
-    txt_clip = txt_clip.set_duration(clip.duration)
-    
-    # Set position
-    if position == 'center':
-        txt_clip = txt_clip.set_position('center')
-    elif position == 'top':
-        txt_clip = txt_clip.set_position(('center', 20))
-    elif position == 'bottom':
-        txt_clip = txt_clip.set_position(('center', 'bottom'))
-    elif position == 'watermark':
-        txt_clip = txt_clip.set_position((10, 10)).set_opacity(0.5)
-    
-    return CompositeVideoClip([clip, txt_clip])
+    """Add Myanmar text to video"""
+    try:
+        def make_text_frame(t):
+            h, w = clip.size
+            img = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(img)
+            
+            try:
+                if font_path and os.path.exists(font_path):
+                    font = ImageFont.truetype(font_path, font_size)
+                else:
+                    font = ImageFont.load_default()
+            except:
+                font = ImageFont.load_default()
+            
+            # Calculate position
+            if position == 'center':
+                x = w // 2
+                y = h // 2
+            elif position == 'top':
+                x = w // 2
+                y = 50
+            elif position == 'bottom':
+                x = w // 2
+                y = h - 100
+            elif position == 'watermark':
+                x = 50
+                y = 50
+            
+            draw.text((x, y), text, fill=color, font=font, anchor='mm')
+            return np.array(img)
+        
+        txt_clip = VideoClip(make_text_frame, duration=clip.duration)
+        return CompositeVideoClip([clip, txt_clip])
+    except Exception as e:
+        logger.error(f"Text effect error: {e}")
+        return clip
 
 def fade_transition(clip1, clip2, duration=1):
-    """Fade transition between two clips"""
+    """Fade transition"""
     clip1_end = clip1.fx(fadeout, duration)
     clip2_start = clip2.fx(fadein, duration)
-    
     return concatenate_videoclips([clip1_end, clip2_start], method="compose")
 
 def slide_transition(clip1, clip2, duration=1, direction='left'):
     """Slide transition"""
-    if direction == 'left':
-        clip2_slide = slide_in(clip2, duration, 'left')
-    else:
-        clip2_slide = slide_in(clip2, duration, 'right')
+    def slide_effect(get_frame, t):
+        frame = get_frame(t)
+        h, w = frame.shape[:2]
+        if direction == 'left':
+            shift = int((t / duration) * w)
+            return np.roll(frame, -shift, axis=1)
+        else:
+            shift = int((t / duration) * w)
+            return np.roll(frame, shift, axis=1)
     
+    clip2_slide = clip2.fl(slide_effect).set_duration(duration)
     return CompositeVideoClip([
         clip1.set_duration(clip1.duration - duration),
         clip2_slide.set_start(clip1.duration - duration)
@@ -388,48 +343,62 @@ def zoom_transition(clip1, clip2, duration=1):
         frame = get_frame(t)
         h, w = frame.shape[:2]
         zoom = 1 + t/duration
-        
         pil_img = Image.fromarray(frame)
         new_w, new_h = int(w * zoom), int(h * zoom)
         zoomed = np.array(pil_img.resize((new_w, new_h), Image.Resampling.LANCZOS))
-        
         y_start = (new_h - h) // 2
         x_start = (new_w - w) // 2
         return zoomed[y_start:y_start+h, x_start:x_start+w]
     
     clip2_zoomed = clip2.fl(zoom_in).set_duration(duration)
-    
     return CompositeVideoClip([
         clip1.set_duration(clip1.duration - duration),
         clip2_zoomed.set_start(clip1.duration - duration)
     ])
 
 def add_background_music(clip, music_path, volume=0.5):
-    """Add background music to video"""
-    logger.debug(f"Adding background music: {music_path}")
-    
+    """Add background music"""
     if not os.path.exists(music_path):
-        logger.error(f"Music file not found: {music_path}")
         return clip
-    
     music = AudioFileClip(music_path)
-    
     if music.duration < clip.duration:
         music = music.loop(duration=clip.duration)
     else:
         music = music.subclip(0, clip.duration)
-    
     music = music.volumex(volume)
-    
     if clip.audio:
         final_audio = CompositeAudioClip([clip.audio, music])
     else:
         final_audio = music
-    
     return clip.set_audio(final_audio)
 
+def reduce_noise_effect(clip, strength=0.5):
+    """Background noise reduction"""
+    try:
+        if clip.audio:
+            audio = clip.audio
+            # Simple low-pass filter for noise reduction
+            from scipy import signal
+            import numpy as np
+            
+            def reduce_noise(get_audio, t):
+                samples = get_audio(t)
+                if samples is None or len(samples) == 0:
+                    return samples
+                
+                # Apply simple low-pass filter
+                b, a = signal.butter(4, 0.1, 'low')
+                filtered = signal.filtfilt(b, a, samples)
+                return filtered.astype(samples.dtype)
+            
+            filtered_audio = audio.fl(reduce_noise)
+            return clip.set_audio(filtered_audio)
+    except Exception as e:
+        logger.error(f"Noise reduction error: {e}")
+    return clip
+
 def get_output_parameters(quality):
-    """Get video parameters based on quality setting"""
+    """Get video parameters based on quality"""
     qualities = {
         '720p': {'codec': 'libx264', 'bitrate': '2000k', 'preset': 'medium'},
         '1080p': {'codec': 'libx264', 'bitrate': '5000k', 'preset': 'medium'},
@@ -440,48 +409,34 @@ def get_output_parameters(quality):
 # ==================== VIDEO PROCESSING ====================
 
 def process_video_task(job_id, input_path, options, user_id):
-    """Background video processing task"""
+    """Background video processing"""
     try:
-        logger.info(f"🎬 Starting job {job_id} for user {user_id}")
         active_jobs[job_id]['status'] = 'processing'
         active_jobs[job_id]['progress'] = 0
-        active_jobs[job_id]['start_time'] = time.time()
         
-        # Check input file
-        if not os.path.exists(input_path):
-            raise Exception(f"Input file not found: {input_path}")
-        
-        # Get options
         split_time = int(options.get('split_time', 6))
         remove_time = float(options.get('remove_time', 1))
         output_quality = options.get('output_quality', '1080p')
         
-        logger.info(f"Loading video: {input_path}")
         video = VideoFileClip(input_path)
         duration = video.duration
-        
-        logger.info(f"Video duration: {duration:.2f} seconds")
-        active_jobs[job_id]['total_duration'] = duration
         
         segments = []
         segment_count = 0
         total_segments = max(1, int(duration / split_time))
         
-        # Process each segment
-        for start_time in range(0, int(duration), split_time):
-            end_time = min(start_time + split_time, duration)
-            
-            if end_time - start_time >= split_time:
-                actual_end = end_time - remove_time
+        for start in range(0, int(duration), split_time):
+            end = min(start + split_time, duration)
+            if end - start >= split_time:
+                actual_end = end - remove_time
             else:
-                actual_end = end_time
+                actual_end = end
             
-            if start_time < actual_end:
+            if start < actual_end:
                 progress = int((segment_count / total_segments) * 100)
                 active_jobs[job_id]['progress'] = progress
                 
-                logger.info(f"Segment {segment_count + 1}: {start_time:.1f}s - {actual_end:.1f}s")
-                segment = video.subclip(start_time, actual_end)
+                segment = video.subclip(start, actual_end)
                 
                 # Apply effects with new timed options
                 if options.get('zoom_enabled') == 'on':
@@ -530,14 +485,14 @@ def process_video_task(job_id, input_path, options, user_id):
                         float(options.get('glitch_intensity', 0.1)))
                 
                 if options.get('oldfilm_enabled') == 'on':
-                    segment = old_film_effect(segment)
+                    segment = old_film_effect(segment,
+                        float(options.get('scratch_intensity', 0.1)))
                 
                 if options.get('speed_enabled') == 'on':
                     segment = speed_effect(segment,
                         float(options.get('speed_factor', 1.5)),
                         options.get('speed_type', 'fast'))
                 
-                # Add text if enabled
                 if options.get('text_enabled') == 'on' and options.get('text_content'):
                     segment = text_effect(segment,
                         options.get('text_content'),
@@ -546,46 +501,46 @@ def process_video_task(job_id, input_path, options, user_id):
                         options.get('text_color', 'white'),
                         options.get('text_position', 'center'))
                 
+                if options.get('noise_reduction') == 'on':
+                    segment = reduce_noise_effect(segment,
+                        float(options.get('noise_strength', 0.5)))
+                
                 segments.append(segment)
                 segment_count += 1
         
         active_jobs[job_id]['progress'] = 90
-        logger.info(f"Created {segment_count} segments")
         
         if not segments:
             raise Exception("No segments created")
         
-        # Concatenate with transitions
-        logger.info("Concatenating segments...")
+        # Apply transitions
         transition_type = options.get('transition_type', 'none')
         transition_duration = float(options.get('transition_duration', 1))
         
         if transition_type == 'none' or len(segments) == 1:
             final_video = concatenate_videoclips(segments, method="compose")
         else:
-            # Apply transitions between segments
             final_segments = []
             for i, seg in enumerate(segments):
                 if i == 0:
                     final_segments.append(seg)
                 else:
                     if transition_type == 'fade':
-                        transition_clip = fade_transition(segments[i-1], seg, transition_duration)
+                        trans = fade_transition(segments[i-1], seg, transition_duration)
                     elif transition_type == 'slide':
-                        transition_clip = slide_transition(segments[i-1], seg, transition_duration)
+                        trans = slide_transition(segments[i-1], seg, transition_duration)
                     elif transition_type == 'zoom':
-                        transition_clip = zoom_transition(segments[i-1], seg, transition_duration)
+                        trans = zoom_transition(segments[i-1], seg, transition_duration)
                     else:
-                        transition_clip = seg
-                    final_segments.append(transition_clip)
-            
+                        trans = seg
+                    final_segments.append(trans)
             final_video = concatenate_videoclips(final_segments, method="compose")
         
         # Add audio
         if video.audio:
             final_video = final_video.set_audio(video.audio)
         
-        # Add background music if enabled
+        # Add background music
         if options.get('music_enabled') == 'on' and options.get('music_path'):
             final_video = add_background_music(final_video,
                 options.get('music_path'),
@@ -594,8 +549,6 @@ def process_video_task(job_id, input_path, options, user_id):
         # Save video
         output_filename = f"{job_id}_edited.mp4"
         output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
-        
-        logger.info(f"Saving to: {output_path}")
         
         params = get_output_parameters(output_quality)
         final_video.write_videofile(
@@ -610,34 +563,37 @@ def process_video_task(job_id, input_path, options, user_id):
             logger='bar'
         )
         
-        # Cleanup
+        # Create preview (first 30 seconds, lower quality)
+        preview_filename = f"{job_id}_preview.mp4"
+        preview_path = os.path.join(app.config['PREVIEW_FOLDER'], preview_filename)
+        
+        preview_duration = min(30, final_video.duration)
+        preview_clip = final_video.subclip(0, preview_duration)
+        preview_clip.write_videofile(
+            preview_path,
+            codec='libx264',
+            bitrate='1000k',
+            preset='fast',
+            audio_codec='aac',
+            temp_audiofile='temp-audio.m4a',
+            remove_temp=True,
+            verbose=False,
+            logger='bar'
+        )
+        preview_clip.close()
+        
         video.close()
         final_video.close()
-        for segment in segments:
-            segment.close()
+        for seg in segments:
+            seg.close()
         
-        processing_time = time.time() - active_jobs[job_id]['start_time']
-        
-        # Update job status
         active_jobs[job_id]['status'] = 'completed'
         active_jobs[job_id]['progress'] = 100
-        active_jobs[job_id]['output_file'] = output_filename
         active_jobs[job_id]['output_path'] = output_path
-        
-        # Save to database
-        conn = sqlite3.connect('users.db')
-        c = conn.cursor()
-        c.execute("INSERT INTO jobs (id, user_id, filename, status, created_at, output_path) VALUES (?, ?, ?, ?, ?, ?)",
-                 (job_id, user_id, os.path.basename(input_path), 'completed', datetime.now(), output_path))
-        conn.commit()
-        conn.close()
-        
-        logger.info(f"Job {job_id} completed in {processing_time:.1f} seconds")
+        active_jobs[job_id]['preview_path'] = preview_path
         
     except Exception as e:
-        logger.error(f"Error in job {job_id}: {str(e)}")
-        logger.error(traceback.format_exc())
-        
+        logger.error(f"Error: {e}")
         active_jobs[job_id]['status'] = 'error'
         active_jobs[job_id]['error'] = str(e)
 
@@ -645,38 +601,32 @@ def process_video_task(job_id, input_path, options, user_id):
 
 @app.route('/')
 def index():
-    """Main page"""
     return render_template('index.html', user=current_user if current_user.is_authenticated else None)
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    """User registration"""
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
         email = request.form.get('email', '')
         
-        if not username or not password:
-            return jsonify({'error': 'Username and password required'}), 400
-        
-        hashed_password = generate_password_hash(password)
+        hashed = generate_password_hash(password)
         
         try:
             conn = sqlite3.connect('users.db')
             c = conn.cursor()
             c.execute("INSERT INTO users (username, password, email, created_at) VALUES (?, ?, ?, ?)",
-                     (username, hashed_password, email, datetime.now()))
+                     (username, hashed, email, datetime.now()))
             conn.commit()
             conn.close()
-            return jsonify({'message': 'User created successfully'})
+            return jsonify({'message': 'User created'})
         except sqlite3.IntegrityError:
-            return jsonify({'error': 'Username already exists'}), 400
+            return jsonify({'error': 'Username exists'}), 400
     
     return render_template('register.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    """User login"""
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
@@ -690,181 +640,131 @@ def login():
         if user and check_password_hash(user[2], password):
             user_obj = User(user[0], user[1], user[3])
             login_user(user_obj)
-            return jsonify({'message': 'Login successful', 'redirect': '/'})
+            return jsonify({'message': 'Login success', 'redirect': '/'})
         
-        return jsonify({'error': 'Invalid username or password'}), 400
+        return jsonify({'error': 'Invalid credentials'}), 400
     
     return render_template('login.html')
 
 @app.route('/logout')
 @login_required
 def logout():
-    """User logout"""
     logout_user()
-    return jsonify({'message': 'Logged out successfully'})
+    return jsonify({'message': 'Logged out'})
 
 @app.route('/current_user')
 def current_user_info():
-    """Get current user info"""
     if current_user.is_authenticated:
-        return jsonify({
-            'authenticated': True,
-            'username': current_user.username,
-            'email': current_user.email
-        })
+        return jsonify({'authenticated': True, 'username': current_user.username})
     return jsonify({'authenticated': False})
 
 @app.route('/upload', methods=['POST'])
 @login_required
-def upload_file():
-    """Upload video and start processing"""
-    try:
-        logger.info(f"Upload request from user {current_user.id}")
-        
-        if 'video' not in request.files:
-            return jsonify({'error': 'No file uploaded'}), 400
-        
-        file = request.files['video']
-        if file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
-        
-        if not allowed_file(file.filename):
-            return jsonify({'error': 'Invalid file type'}), 400
-        
-        # Generate job ID
-        job_id = str(uuid.uuid4())
-        filename = secure_filename(file.filename)
-        
-        # Save file
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        safe_filename = f"{timestamp}_{filename}"
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{job_id}_{safe_filename}")
-        
-        file.save(file_path)
-        
-        # Get options from form
-        options = {
-            'split_time': request.form.get('split_time', '6'),
-            'remove_time': request.form.get('remove_time', '1'),
-            'output_quality': request.form.get('output_quality', '1080p'),
-            
-            'zoom_enabled': request.form.get('zoom_enabled', 'off'),
-            'zoom_timed': request.form.get('zoom_timed', 'off'),
-            'zoom_factor': request.form.get('zoom_factor', '1.5'),
-            'zoom_type': request.form.get('zoom_type', 'in'),
-            'zoom_interval': request.form.get('zoom_interval', '7'),
-            'zoom_duration': request.form.get('zoom_duration', '2'),
-            
-            'freeze_enabled': request.form.get('freeze_enabled', 'off'),
-            'freeze_timed': request.form.get('freeze_timed', 'off'),
-            'freeze_duration': request.form.get('freeze_duration', '1'),
-            'freeze_interval': request.form.get('freeze_interval', '5'),
-            
-            'mirror_enabled': request.form.get('mirror_enabled', 'off'),
-            'mirror_type': request.form.get('mirror_type', 'horizontal'),
-            
-            'rotate_enabled': request.form.get('rotate_enabled', 'off'),
-            'rotate_angle': request.form.get('rotate_angle', '90'),
-            
-            'blur_enabled': request.form.get('blur_enabled', 'off'),
-            'blur_radius': request.form.get('blur_radius', '5'),
-            
-            'glitch_enabled': request.form.get('glitch_enabled', 'off'),
-            'glitch_intensity': request.form.get('glitch_intensity', '0.1'),
-            
-            'oldfilm_enabled': request.form.get('oldfilm_enabled', 'off'),
-            
-            'speed_enabled': request.form.get('speed_enabled', 'off'),
-            'speed_factor': request.form.get('speed_factor', '1.5'),
-            'speed_type': request.form.get('speed_type', 'fast'),
-            
-            'text_enabled': request.form.get('text_enabled', 'off'),
-            'text_content': request.form.get('text_content', ''),
-            'text_font': request.form.get('text_font', '/System/Library/Fonts/Supplemental/MyanmarSangamMN.ttc'),
-            'text_size': request.form.get('text_size', '40'),
-            'text_color': request.form.get('text_color', 'white'),
-            'text_position': request.form.get('text_position', 'center'),
-            
-            'transition_type': request.form.get('transition_type', 'none'),
-            'transition_duration': request.form.get('transition_duration', '1'),
-            
-            'music_enabled': request.form.get('music_enabled', 'off'),
-            'music_path': request.form.get('music_path', ''),
-            'music_volume': request.form.get('music_volume', '0.5')
-        }
-        
-        # Initialize job
-        active_jobs[job_id] = {
-            'id': job_id,
-            'user_id': current_user.id,
-            'filename': filename,
-            'status': 'queued',
-            'progress': 0,
-            'options': options,
-            'input_path': file_path,
-            'created_at': time.time()
-        }
-        
-        # Start processing thread
-        thread = threading.Thread(
-            target=process_video_task,
-            args=(job_id, file_path, options, current_user.id),
-            daemon=True
-        )
-        thread.start()
-        
-        logger.info(f"Job {job_id} queued for user {current_user.id}")
-        
-        return jsonify({
-            'job_id': job_id,
-            'message': 'Video uploaded successfully'
-        })
-        
-    except Exception as e:
-        logger.error(f"Upload error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+def upload():
+    if 'video' not in request.files:
+        return jsonify({'error': 'No file'}), 400
+    
+    file = request.files['video']
+    if file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+    
+    job_id = str(uuid.uuid4())
+    filename = secure_filename(file.filename)
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], f"{job_id}_{filename}")
+    file.save(filepath)
+    
+    options = {
+        'split_time': request.form.get('split_time', '6'),
+        'remove_time': request.form.get('remove_time', '1'),
+        'output_quality': request.form.get('output_quality', '1080p'),
+        'zoom_enabled': request.form.get('zoom_enabled', 'off'),
+        'zoom_timed': request.form.get('zoom_timed', 'off'),
+        'zoom_factor': request.form.get('zoom_factor', '1.5'),
+        'zoom_type': request.form.get('zoom_type', 'in'),
+        'zoom_interval': request.form.get('zoom_interval', '7'),
+        'zoom_duration': request.form.get('zoom_duration', '2'),
+        'freeze_enabled': request.form.get('freeze_enabled', 'off'),
+        'freeze_timed': request.form.get('freeze_timed', 'off'),
+        'freeze_duration': request.form.get('freeze_duration', '1'),
+        'freeze_interval': request.form.get('freeze_interval', '5'),
+        'mirror_enabled': request.form.get('mirror_enabled', 'off'),
+        'mirror_type': request.form.get('mirror_type', 'horizontal'),
+        'rotate_enabled': request.form.get('rotate_enabled', 'off'),
+        'rotate_angle': request.form.get('rotate_angle', '90'),
+        'blur_enabled': request.form.get('blur_enabled', 'off'),
+        'blur_radius': request.form.get('blur_radius', '5'),
+        'glitch_enabled': request.form.get('glitch_enabled', 'off'),
+        'glitch_intensity': request.form.get('glitch_intensity', '0.1'),
+        'oldfilm_enabled': request.form.get('oldfilm_enabled', 'off'),
+        'scratch_intensity': request.form.get('scratch_intensity', '0.1'),
+        'speed_enabled': request.form.get('speed_enabled', 'off'),
+        'speed_factor': request.form.get('speed_factor', '1.5'),
+        'speed_type': request.form.get('speed_type', 'fast'),
+        'text_enabled': request.form.get('text_enabled', 'off'),
+        'text_content': request.form.get('text_content', ''),
+        'text_font': request.form.get('text_font', ''),
+        'text_size': request.form.get('text_size', '40'),
+        'text_color': request.form.get('text_color', 'white'),
+        'text_position': request.form.get('text_position', 'center'),
+        'transition_enabled': request.form.get('transition_enabled', 'off'),
+        'transition_type': request.form.get('transition_type', 'fade'),
+        'transition_duration': request.form.get('transition_duration', '1'),
+        'music_enabled': request.form.get('music_enabled', 'off'),
+        'music_path': request.form.get('music_path', ''),
+        'music_volume': request.form.get('music_volume', '0.5'),
+        'noise_reduction': request.form.get('noise_reduction', 'off'),
+        'noise_strength': request.form.get('noise_strength', '0.5')
+    }
+    
+    active_jobs[job_id] = {
+        'id': job_id,
+        'user_id': current_user.id,
+        'filename': filename,
+        'status': 'queued',
+        'progress': 0,
+        'options': options,
+        'input_path': filepath
+    }
+    
+    thread = threading.Thread(target=process_video_task, args=(job_id, filepath, options, current_user.id))
+    thread.daemon = True
+    thread.start()
+    
+    return jsonify({'job_id': job_id})
 
 @app.route('/status/<job_id>')
 @login_required
-def get_status(job_id):
-    """Get job status"""
+def status(job_id):
     if job_id in active_jobs and active_jobs[job_id]['user_id'] == current_user.id:
         job = active_jobs[job_id]
-        response = {
-            'status': job['status'],
-            'progress': job['progress'],
-            'filename': job['filename']
-        }
-        
+        resp = {'status': job['status'], 'progress': job['progress']}
         if job['status'] == 'completed':
-            response['output_url'] = f"/download/{job_id}"
+            resp['output_url'] = f"/download/{job_id}"
+            resp['preview_url'] = f"/preview/{job_id}"
         elif job['status'] == 'error':
-            response['error'] = job.get('error', 'Unknown error')
-        
-        return jsonify(response)
-    
-    return jsonify({'error': 'Job not found'}), 404
+            resp['error'] = job.get('error')
+        return jsonify(resp)
+    return jsonify({'error': 'Not found'}), 404
 
 @app.route('/download/<job_id>')
 @login_required
-def download_file(job_id):
-    """Download processed video"""
-    if job_id in active_jobs and active_jobs[job_id]['user_id'] == current_user.id:
-        job = active_jobs[job_id]
-        if job['status'] == 'completed' and os.path.exists(job['output_path']):
-            return send_file(
-                job['output_path'],
-                as_attachment=True,
-                download_name=f"edited_{job['filename']}",
-                mimetype='video/mp4'
-            )
-    
-    return jsonify({'error': 'File not ready'}), 404
+def download(job_id):
+    if job_id in active_jobs and active_jobs[job_id]['status'] == 'completed':
+        return send_file(active_jobs[job_id]['output_path'], as_attachment=True)
+    return jsonify({'error': 'Not ready'}), 404
+
+@app.route('/preview/<job_id>')
+@login_required
+def preview(job_id):
+    if job_id in active_jobs and active_jobs[job_id]['status'] == 'completed':
+        preview_path = active_jobs[job_id].get('preview_path')
+        if preview_path and os.path.exists(preview_path):
+            return send_file(preview_path)
+    return jsonify({'error': 'Preview not available'}), 404
 
 @app.route('/jobs')
 @login_required
 def list_jobs():
-    """List user's jobs"""
     user_jobs = []
     for job_id, job in active_jobs.items():
         if job['user_id'] == current_user.id:
@@ -872,49 +772,22 @@ def list_jobs():
                 'id': job_id,
                 'filename': job['filename'],
                 'status': job['status'],
-                'progress': job['progress'],
-                'created_at': datetime.fromtimestamp(job['created_at']).strftime('%H:%M:%S')
+                'progress': job['progress']
             })
     return jsonify(user_jobs)
 
-@app.route('/history')
-@login_required
-def job_history():
-    """Get user's job history from database"""
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-    c.execute("SELECT id, filename, status, created_at FROM jobs WHERE user_id = ? ORDER BY created_at DESC LIMIT 10",
-              (current_user.id,))
-    jobs = c.fetchall()
-    conn.close()
-    
-    return jsonify([{
-        'id': j[0],
-        'filename': j[1],
-        'status': j[2],
-        'created_at': j[3]
-    } for j in jobs])
-
 @app.route('/health')
-def health_check():
-    """Health check endpoint"""
-    return jsonify({
-        'status': 'healthy',
-        'moviepy_loaded': 'moviepy' in sys.modules,
-        'pillow_loaded': 'PIL' in sys.modules
-    })
-
-@app.errorhandler(413)
-def too_large(e):
-    return jsonify({'error': 'File too large. Maximum size is 10240MB'}), 413
+def health():
+    return jsonify({'status': 'ok'})
 
 if __name__ == '__main__':
-    print("\n" + "="*70)
-    print("🎬 AI Video Editor Web App - Complete Edition")
-    print("="*70)
+    print("\n" + "="*60)
+    print("🎬 AI Video Editor Web App")
+    print("="*60)
     print(f"📁 Upload folder: {app.config['UPLOAD_FOLDER']}")
     print(f"📁 Output folder: {app.config['OUTPUT_FOLDER']}")
+    print(f"📁 Preview folder: {app.config['PREVIEW_FOLDER']}")
     print(f"🌐 URL: http://localhost:5555")
-    print("="*70 + "\n")
+    print("="*60 + "\n")
     
     app.run(debug=True, host='0.0.0.0', port=5555, threaded=True)
