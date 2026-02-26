@@ -544,6 +544,85 @@
                 </div>
             </div>
             
+
+
+	    <!-- Downloader Panel (New Feature) -->
+<div class="left-panel hidden" id="downloaderPanel">
+    <h2>📥 Video/Audio Downloader</h2>
+    <p class="panel-description">Download from YouTube, Facebook, TikTok, and more</p>
+    
+    <div class="url-section">
+        <h3>Enter URL</h3>
+        <input type="url" id="downloadUrl" class="form-control" 
+               placeholder="https://www.youtube.com/watch?v=...">
+        <p class="small">Support: YouTube, Facebook, TikTok, Instagram, Twitter, Vimeo</p>
+    </div>
+    
+    <div class="url-preview hidden" id="urlPreview">
+        <div class="preview-card">
+            <img id="previewThumbnail" src="" alt="Thumbnail" style="max-width: 100%; border-radius: 10px;">
+            <h4 id="previewTitle"></h4>
+            <p id="previewUploader"></p>
+            <p id="previewDuration"></p>
+        </div>
+    </div>
+    
+    <div class="download-settings">
+        <h3>Download Settings</h3>
+        
+        <div class="setting-group">
+            <label>File Type:</label>
+            <select id="downloadType" class="form-control">
+                <option value="mp4" selected>🎬 Video (MP4)</option>
+                <option value="mp3">🎵 Audio (MP3)</option>
+            </select>
+        </div>
+        
+        <div class="setting-group" id="qualityGroup">
+            <label>Quality:</label>
+            <select id="downloadQuality" class="form-control">
+                <option value="1080p">1080p Full HD</option>
+                <option value="720p" selected>720p HD</option>
+                <option value="480p">480p SD</option>
+                <option value="best">Best Available</option>
+            </select>
+        </div>
+    </div>
+    
+    <button class="process-btn" id="downloadBtn">
+        <span>📥 Download Now</span>
+    </button>
+    
+    <div class="download-result hidden" id="downloadResult">
+        <h3>Download Complete!</h3>
+        <div class="download-actions">
+            <a href="#" id="downloadLink" class="download-btn">💾 Save File</a>
+            <button class="copy-btn" onclick="showDownloader()">📋 Download Another</button>
+        </div>
+    </div>
+</div>
+
+<!-- Update Feature Selector Buttons -->
+<div class="feature-selector">
+    <button class="feature-btn active" onclick="showFeature('editor')" id="btnEditor">
+        <span class="feature-icon">🎬</span>
+        <span class="feature-text">Video Editor</span>
+    </button>
+    <button class="feature-btn" onclick="showFeature('downloader')" id="btnDownloader">
+        <span class="feature-icon">📥</span>
+        <span class="feature-text">Downloader</span>
+    </button>
+    <button class="feature-btn" onclick="showFeature('transcript')" id="btnTranscript">
+        <span class="feature-icon">📝</span>
+        <span class="feature-text">Transcript</span>
+    </button>
+    <button class="feature-btn" onclick="showFeature('voice')" id="btnVoice">
+        <span class="feature-icon">🎤</span>
+        <span class="feature-text">Voice</span>
+    </button>
+</div>
+
+
             <!-- Right Panel - Jobs & Progress -->
             <div class="right-panel">
                 <h2>📊 Recent Jobs</h2>

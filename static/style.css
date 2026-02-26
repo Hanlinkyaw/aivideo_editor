@@ -1268,3 +1268,124 @@ textarea.form-control {
     border-radius: 15px;
     border: 1px solid var(--border-color);
 }
+
+
+/* ========== DOWNLOADER STYLES ========== */
+.url-preview {
+    margin: 20px 0;
+    padding: 20px;
+    background: var(--bg-secondary);
+    border-radius: 20px;
+    animation: slideUp 0.3s ease;
+}
+
+.preview-card {
+    text-align: center;
+}
+
+.preview-card img {
+    max-width: 100%;
+    max-height: 200px;
+    border-radius: 15px;
+    margin-bottom: 15px;
+    box-shadow: 0 10px 20px var(--shadow-color);
+}
+
+.preview-card h4 {
+    color: var(--text-primary);
+    margin-bottom: 10px;
+    font-size: 1.1rem;
+}
+
+.preview-card p {
+    color: var(--text-secondary);
+    margin: 5px 0;
+    font-size: 0.95rem;
+}
+
+.download-settings {
+    background: var(--bg-secondary);
+    padding: 20px;
+    border-radius: 20px;
+    margin: 20px 0;
+    border: 1px solid var(--border-color);
+}
+
+.download-result {
+    margin-top: 30px;
+    padding: 25px;
+    background: linear-gradient(135deg, rgba(0, 184, 148, 0.1), rgba(0, 206, 201, 0.1));
+    border-radius: 25px;
+    border: 2px solid var(--success-color);
+    text-align: center;
+    animation: slideUp 0.5s ease;
+}
+
+.download-result h3 {
+    color: var(--success-color);
+    margin-bottom: 20px;
+    font-size: 1.5rem;
+}
+
+.download-actions {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.download-actions .download-btn {
+    background: var(--success-color);
+    padding: 15px 30px;
+    font-size: 1.1rem;
+}
+
+.download-actions .copy-btn {
+    background: var(--info-color);
+    color: white;
+    border: none;
+    padding: 15px 30px;
+    border-radius: 30px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition-smooth);
+}
+
+.download-actions .copy-btn:hover {
+    background: #2980b9;
+    transform: translateY(-3px);
+    box-shadow: 0 10px 20px rgba(52, 152, 219, 0.3);
+}
+
+#qualityGroup {
+    transition: all 0.3s ease;
+}
+
+/* Feature button for downloader */
+#btnDownloader .feature-icon {
+    animation: bounce 2s infinite;
+}
+
+/* URL input styling */
+#downloadUrl {
+    font-family: monospace;
+    font-size: 0.95rem;
+    padding: 15px;
+    border: 2px solid var(--border-color);
+    transition: all 0.3s ease;
+}
+
+#downloadUrl:focus {
+    border-color: var(--info-color);
+    box-shadow: 0 0 0 4px rgba(52, 152, 219, 0.1);
+}
+
+#downloadUrl.valid {
+    border-color: var(--success-color);
+}
+
+#downloadUrl.invalid {
+    border-color: var(--error-color);
+}
+

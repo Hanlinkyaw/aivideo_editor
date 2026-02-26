@@ -12,6 +12,13 @@ let currentVoiceId = null;
 document.addEventListener('DOMContentLoaded', function() {
     console.log('✅ DOM loaded - Initializing...');
     
+
+// Check saved dark mode preference
+if (localStorage.getItem('darkMode') === 'enabled') {
+    document.body.classList.add('dark-mode');
+    const toggle = document.getElementById('themeToggle');
+    if (toggle) toggle.textContent = '☀️';
+}
     // Get elements
     const uploadArea = document.getElementById('uploadArea');
     const videoInput = document.getElementById('videoInput');
@@ -148,22 +155,35 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
     
-    // ========== FEATURE SELECTION ==========
-    window.showFeature = function(feature) {
-        // Update buttons
-        document.querySelectorAll('.feature-btn').forEach(btn => {
-            btn.classList.remove('active');
-        });
-        document.getElementById(`btn${feature.charAt(0).toUpperCase() + feature.slice(1)}`).classList.add('active');
-        
-        // Show selected panel
-        document.getElementById('editorPanel').classList.add('hidden');
-        document.getElementById('transcriptPanel').classList.add('hidden');
-        document.getElementById('voicePanel').classList.add('hidden');
-        
-        document.getElementById(`${feature}Panel`).classList.remove('hidden');
+   // ==========NEW FEATURE SELECTION ==========
+window.showFeature = function(feature) {
+    // Update buttons
+    document.querySelectorAll('.feature-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // Map feature names to button IDs
+    const buttonMap = {
+        'editor': 'btnEditor',
+        'downloader': 'btnDownloader',
+        'transcript': 'btnTranscript',
+        'voice': 'btnVoice'
     };
     
+    const btnId = buttonMap[feature];
+    if (btnId) {
+        document.getElementById(btnId).classList.add('active');
+    }
+    
+    // Show selected panel
+    document.getElementById('editorPanel').classList.add('hidden');
+    document.getElementById('downloaderPanel').classList.add('hidden');
+    document.getElementById('transcriptPanel').classList.add('hidden');
+    document.getElementById('voicePanel').classList.add('hidden');
+    
+    document.getElementById(`${feature}Panel`).classList.remove('hidden');
+};
+ 
     // ========== VIDEO EDITOR UPLOAD ==========
     
     // Click to upload
@@ -994,4 +1014,167 @@ if (localStorage.getItem('darkMode') === 'enabled') {
     document.body.classList.add('dark-mode');
     const toggle = document.getElementById('themeToggle');
     if (toggle) toggle.textContent = '☀️';
+}
+
+
+// ========== DOWNLOADER FUNCTIONS ==========
+
+let currentDownloadJobId = null;
+
+// Elements
+const downloadUrl = document.getElementById('downloadUrl');
+const downloadType = document.getElementById('downloadType');
+const downloadQuality = document.getElementById('downloadQuality');
+const downloadBtn = document.getElementById('downloadBtn');
+const qualityGroup = document.getElementById('qualityGroup');
+const urlPreview = document.getElementById('urlPreview');
+const previewTitle = document.getElementById('previewTitle');
+const previewUploader = document.getElementById('previewUploader');
+const previewDuration = document.getElementById('previewDuration');
+const previewThumbnail = document.getElementById('previewThumbnail');
+const downloadResult = document.getElementById('downloadResult');
+const downloadLink = document.getElementById('downloadLink');
+
+// URL input change - get video info
+if (downloadUrl) {
+    let timeoutId;
+    downloadUrl.addEventListener('input', function() {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+            const url = this.value.trim();
+            if (url && (url.includes('youtube.com') || url.includes('youtu.be') || 
+                        url.includes('facebook.com') || url.includes('tiktok.com'))) {
+                getUrlInfo(url);
+            } else {
+                urlPreview.classList.add('hidden');
+            }
+        }, 1000);
+    });
+}
+
+// Download type change
+if (downloadType) {
+    downloadType.addEventListener('change', function() {
+        if (this.value === 'mp3') {
+            qualityGroup.style.display = 'none';
+        } else {
+            qualityGroup.style.display = 'block';
+        }
+    });
+}
+
+// Download button click
+if (downloadBtn) {
+    downloadBtn.addEventListener('click', startDownload);
+}
+
+async function getUrlInfo(url) {
+    try {
+        const formData = new FormData();
+        formData.append('url', url);
+        
+        const response = await fetch('/url-info', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            previewTitle.textContent = data.title || 'Unknown Title';
+            previewUploader.textContent = data.uploader || 'Unknown Uploader';
+            if (data.duration) {
+                const minutes = Math.floor(data.duration / 60);
+                const seconds = data.duration % 60;
+                previewDuration.textContent = `Duration: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+            }
+            if (data.thumbnail) {
+                previewThumbnail.src = data.thumbnail;
+            }
+            urlPreview.classList.remove('hidden');
+        }
+    } catch (error) {
+        console.error('Failed to get video info:', error);
+    }
+}
+
+async function startDownload() {
+    const url = downloadUrl.value.trim();
+    
+    if (!url) {
+        alert('Please enter a URL');
+        return;
+    }
+    
+    const fileType = downloadType.value;
+    const quality = downloadQuality.value;
+    
+    showProgressModal('Downloading... (This may take a moment)');
+    
+    const formData = new FormData();
+    formData.append('url', url);
+    formData.append('file_type', fileType);
+    formData.append('quality', quality);
+    
+    try {
+        const response = await fetch('/download-url', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            currentDownloadJobId = data.job_id;
+            startDownloadStatusCheck(data.job_id);
+        } else {
+            hideProgressModal();
+            alert('Error: ' + data.error);
+        }
+    } catch (error) {
+        hideProgressModal();
+        alert('Download failed: ' + error.message);
+    }
+}
+
+function startDownloadStatusCheck(jobId) {
+    if (statusInterval) {
+        clearInterval(statusInterval);
+    }
+    
+    statusInterval = setInterval(async () => {
+        try {
+            const response = await fetch(`/status/${jobId}`);
+            const data = await response.json();
+            
+            updateProgress(data.progress, data.status);
+            
+            if (data.status === 'completed') {
+                clearInterval(statusInterval);
+                hideProgressModal();
+                
+                // Show download link
+                downloadResult.classList.remove('hidden');
+                downloadLink.href = `/download-file/${jobId}`;
+                
+                // Load jobs list
+                loadJobs();
+                
+            } else if (data.status === 'error') {
+                clearInterval(statusInterval);
+                hideProgressModal();
+                alert('Download error: ' + data.error);
+            }
+        } catch (error) {
+            console.error('Status check failed:', error);
+        }
+    }, 1000);
+}
+
+// Show downloader panel function
+window.showDownloader = function() {
+    downloadResult.classList.add('hidden');
+    downloadUrl.value = '';
+    urlPreview.classList.add('hidden');
+    showFeature('downloader');
 }

@@ -15,6 +15,9 @@ import sqlite3
 import json
 import subprocess
 import tempfile
+import subprocess
+import re
+from urllib.parse import urlparse
 from datetime import datetime
 from functools import wraps
 
@@ -137,6 +140,61 @@ def init_db():
                   FOREIGN KEY (user_id) REFERENCES users (id))''')
     conn.commit()
     conn.close()
+
+# Database setup
+def init_db():
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    
+    # Users table
+    c.execute('''CREATE TABLE IF NOT EXISTS users
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                  username TEXT UNIQUE, 
+                  password TEXT,
+                  email TEXT,
+                  created_at TIMESTAMP)''')
+    
+    # Jobs table (ဒီနေရာကိုပြင်ရမယ်)
+    c.execute('''CREATE TABLE IF NOT EXISTS jobs
+                 (id TEXT PRIMARY KEY,
+                  user_id INTEGER,
+                  filename TEXT,
+                  type TEXT,
+                  status TEXT,
+                  created_at TIMESTAMP,
+                  output_path TEXT,
+                  FOREIGN KEY (user_id) REFERENCES users (id))''')
+    
+    # ဒီအောက်ကဟာတွေကိုထည့်ရမယ် (type column ရှိမရှိစစ်မယ်)
+    try:
+        c.execute("ALTER TABLE jobs ADD COLUMN type TEXT")
+        print("✅ Added type column to jobs table")
+    except:
+        print("ℹ️ type column already exists")
+    
+    # Transcripts table
+    c.execute('''CREATE TABLE IF NOT EXISTS transcripts
+                 (id TEXT PRIMARY KEY,
+                  user_id INTEGER,
+                  filename TEXT,
+                  content TEXT,
+                  language TEXT,
+                  created_at TIMESTAMP,
+                  FOREIGN KEY (user_id) REFERENCES users (id))''')
+    
+    # Voices table
+    c.execute('''CREATE TABLE IF NOT EXISTS voices
+                 (id TEXT PRIMARY KEY,
+                  user_id INTEGER,
+                  text TEXT,
+                  audio_path TEXT,
+                  language TEXT,
+                  created_at TIMESTAMP,
+                  FOREIGN KEY (user_id) REFERENCES users (id))''')
+    
+    conn.commit()
+    conn.close()
+
 
 init_db()
 
@@ -1193,6 +1251,227 @@ def clone_status(job_id):
     # Simple implementation - can be expanded
     return jsonify({'status': 'completed'})
 
+
+# ==================== YOUTUBE/TIKTOK DOWNLOADER ====================
+
+import subprocess
+import re
+from urllib.parse import urlparse
+
+def validate_url(url):
+    """Check if URL is valid and supported"""
+    supported_domains = [
+        'youtube.com', 'youtu.be', 
+        'facebook.com', 'fb.watch', 
+        'tiktok.com', 'vm.tiktok.com',
+        'instagram.com', 'twitter.com', 'x.com',
+        'vimeo.com', 'dailymotion.com'
+    ]
+    try:
+        parsed = urlparse(url)
+        domain = parsed.netloc.lower()
+        # Remove www.
+        domain = domain.replace('www.', '')
+        return any(supported in domain for supported in supported_domains)
+    except:
+        return False
+
+
+@app.route('/download-url', methods=['POST'])
+@login_required
+def download_from_url():
+    """Download video from URL (YouTube, Facebook, TikTok)"""
+    try:
+        logger.info(f"Download request from user {current_user.id}")
+        
+        url = request.form.get('url', '')
+        quality = request.form.get('quality', '720p')
+        file_type = request.form.get('file_type', 'mp4')  # mp4 or mp3
+        
+        if not url:
+            return jsonify({'error': 'No URL provided'}), 400
+        
+        # Validate URL
+        if not validate_url(url):
+            return jsonify({'error': 'Unsupported URL. Please use YouTube, Facebook, or TikTok URLs'}), 400
+        
+        job_id = str(uuid.uuid4())
+        
+        # Output path ကို အရင်သတ်မှတ်မယ်
+        if file_type == 'mp3':
+            output_filename = f"{job_id}.mp3"
+            output_path = os.path.join(app.config['AUDIO_FOLDER'], output_filename)
+        else:
+            output_filename = f"{job_id}.mp4"
+            output_path = os.path.join(app.config['UPLOAD_FOLDER'], output_filename)
+        
+        # Build yt-dlp command with proper format specifications
+        cmd = [
+            'yt-dlp',
+            '--no-playlist',
+            '--no-warnings',
+            '--progress',
+            '--newline',
+        ]
+        
+        if file_type == 'mp3':
+            # Audio only - force MP3
+            cmd.extend([
+                '-f', 'bestaudio/best',
+                '-x',  # Extract audio
+                '--audio-format', 'mp3',
+                '--audio-quality', '0',  # Best quality
+                '--postprocessor-args', '-acodec mp3',
+                '-o', output_path  # Direct output path with .mp3 extension
+            ])
+        else:
+            # Video with audio - force MP4
+            if quality == '1080p':
+                format_spec = 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best'
+            elif quality == '720p':
+                format_spec = 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best'
+            elif quality == '480p':
+                format_spec = 'bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]/best'
+            else:
+                format_spec = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
+            
+            cmd.extend([
+                '-f', format_spec,
+                '--merge-output-format', 'mp4',
+                '-o', output_path  # Direct output path with .mp4 extension
+            ])
+        
+        cmd.append(url)
+        
+        logger.info(f"Running command: {' '.join(cmd)}")
+        
+        # Initialize job status
+        active_jobs[job_id] = {
+            'id': job_id,
+            'user_id': current_user.id,
+            'filename': f"Download from {url[:30]}...",
+            'status': 'processing',
+            'progress': 0,
+            'type': 'download',
+            'created_at': time.time(),
+            'output_path': output_path,
+            'file_type': file_type
+        }
+        
+        # Run download in background thread
+        thread = threading.Thread(
+            target=run_download_task_v2,
+            args=(job_id, cmd, output_path, file_type, current_user.id, url),
+            daemon=True
+        )
+        thread.start()
+        
+        return jsonify({
+            'job_id': job_id,
+            'message': 'Download started'
+        })
+        
+    except Exception as e:
+        logger.error(f"Download error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+def run_download_task_v2(job_id, cmd, output_path, file_type, user_id, url):
+    """Run yt-dlp in background"""
+    try:
+        # Run yt-dlp
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            # Check if file exists
+            if os.path.exists(output_path):
+                final_path = output_path
+            else:
+                # Look for any file with job_id
+                files = os.listdir('.')
+                downloaded_file = None
+                for f in files:
+                    if job_id in f:
+                        downloaded_file = f
+                        break
+                
+                if downloaded_file:
+                    # Rename to correct format
+                    if file_type == 'mp3':
+                        final_path = os.path.join(app.config['AUDIO_FOLDER'], f"{job_id}.mp3")
+                    else:
+                        final_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{job_id}.mp4")
+                    
+                    os.rename(downloaded_file, final_path)
+                else:
+                    raise Exception("Downloaded file not found")
+            
+            # Save to database
+            conn = sqlite3.connect('users.db')
+            c = conn.cursor()
+            c.execute("""INSERT INTO jobs 
+                       (id, user_id, filename, type, status, created_at, output_path) 
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                     (job_id, user_id, os.path.basename(url), 'download', 'completed', datetime.now(), final_path))
+            conn.commit()
+            conn.close()
+            
+            active_jobs[job_id]['status'] = 'completed'
+            active_jobs[job_id]['progress'] = 100
+            active_jobs[job_id]['output_file'] = os.path.basename(final_path)
+            
+        else:
+            error_msg = result.stderr
+            raise Exception(f"yt-dlp error: {error_msg}")
+            
+    except Exception as e:
+        logger.error(f"Download task error: {str(e)}")
+        if job_id in active_jobs:
+            active_jobs[job_id]['status'] = 'error'
+            active_jobs[job_id]['error'] = str(e)
+
+
+@app.route('/download-file/<job_id>')
+@login_required
+def download_file_by_id(job_id):
+    """Download downloaded file"""
+    if job_id in active_jobs and active_jobs[job_id]['user_id'] == current_user.id:
+        job = active_jobs[job_id]
+        if job['status'] == 'completed' and os.path.exists(job['output_path']):
+            return send_file(
+                job['output_path'],
+                as_attachment=True,
+                download_name=f"downloaded_{os.path.basename(job['output_path'])}"
+            )
+    return jsonify({'error': 'File not ready'}), 404
+
+@app.route('/url-info', methods=['POST'])
+@login_required
+def get_url_info():
+    """Get video info from URL"""
+    try:
+        url = request.form.get('url', '')
+        if not url:
+            return jsonify({'error': 'No URL'}), 400
+        
+        # Get video info using yt-dlp
+        cmd = ['yt-dlp', '--dump-json', '--no-playlist', url]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            import json as jsonlib
+            info = jsonlib.loads(result.stdout)
+            return jsonify({
+                'title': info.get('title', 'Unknown'),
+                'duration': info.get('duration', 0),
+                'uploader': info.get('uploader', 'Unknown'),
+                'thumbnail': info.get('thumbnail', '')
+            })
+        else:
+            return jsonify({'error': 'Could not get video info'}), 400
+            
+    except Exception as e:
+        logger.error(f"URL info error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     print("\n" + "="*70)
