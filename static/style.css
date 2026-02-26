@@ -1237,3 +1237,34 @@ textarea.form-control {
 
 .transcript-content {
     background: var(--bg
+
+/* For Voice Clone  */
+
+.voice-clone-section {
+    margin-bottom: 30px;
+    padding: 20px;
+    background: var(--bg-secondary);
+    border-radius: 20px;
+    border: 2px solid var(--accent-gradient);
+}
+
+.voice-clone-card {
+    margin-top: 15px;
+}
+
+.voice-clone-card .upload-area {
+    min-height: 150px;
+    padding: 20px;
+}
+
+.voice-clone-card .upload-icon {
+    font-size: 48px;
+}
+
+.clone-preview {
+    margin-top: 15px;
+    padding: 15px;
+    background: var(--bg-primary);
+    border-radius: 15px;
+    border: 1px solid var(--border-color);
+}

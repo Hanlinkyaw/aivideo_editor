@@ -1111,6 +1111,88 @@ def health_check():
 @app.errorhandler(413)
 def too_large(e):
     return jsonify({'error': 'File too large. Maximum size is 1GB'}), 413
+# Voice Clone functions ထည့်မယ် (app.py ရဲ့ အောက်ဆုံးမှာ ထည့်ပါ)
+
+# ==================== VOICE CLONE FEATURE ====================
+
+try:
+    from TTS.api import TTS
+    print("✅ TTS imported successfully for voice cloning")
+except ImportError as e:
+    print(f"❌ TTS import error: {e}")
+    print("Please install TTS: pip install TTS")
+
+@app.route('/voice-clone', methods=['POST'])
+@login_required
+def clone_voice():
+    """Clone voice from audio sample"""
+    try:
+        logger.info(f"Voice clone request from user {current_user.id}")
+        
+        if 'audio' not in request.files:
+            return jsonify({'error': 'No audio file provided'}), 400
+        
+        text = request.form.get('text', '')
+        if not text:
+            return jsonify({'error': 'No text provided'}), 400
+        
+        audio_file = request.files['audio']
+        if not allowed_file(audio_file.filename):
+            return jsonify({'error': 'Invalid audio file type'}), 400
+        
+        job_id = str(uuid.uuid4())
+        
+        # Save uploaded audio sample
+        sample_filename = f"{job_id}_sample.wav"
+        sample_path = os.path.join(app.config['AUDIO_FOLDER'], sample_filename)
+        audio_file.save(sample_path)
+        
+        # Initialize TTS with voice cloning
+        tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2", gpu=False)
+        
+        # Generate cloned voice
+        output_filename = f"{job_id}_cloned.wav"
+        output_path = os.path.join(app.config['AUDIO_FOLDER'], output_filename)
+        
+        tts.tts_to_file(
+            text=text,
+            speaker_wav=sample_path,
+            language="my",  # Myanmar language
+            file_path=output_path
+        )
+        
+        # Save to database
+        voice_id = str(uuid.uuid4())
+        conn = sqlite3.connect('users.db')
+        c = conn.cursor()
+        c.execute("""INSERT INTO voices 
+                     (id, user_id, text, audio_path, language, created_at) 
+                     VALUES (?, ?, ?, ?, ?, ?)""",
+                 (voice_id, current_user.id, text[:100], output_path, 'my-clone', datetime.now()))
+        conn.commit()
+        conn.close()
+        
+        # Cleanup sample file
+        os.remove(sample_path)
+        
+        return jsonify({
+            'job_id': job_id,
+            'voice_id': voice_id,
+            'audio_url': f"/audio/{output_filename}",
+            'text': text[:100] + ('...' if len(text) > 100 else '')
+        })
+        
+    except Exception as e:
+        logger.error(f"Voice clone error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/clone-status/<job_id>')
+@login_required
+def clone_status(job_id):
+    """Check voice clone status"""
+    # Simple implementation - can be expanded
+    return jsonify({'status': 'completed'})
+
 
 if __name__ == '__main__':
     print("\n" + "="*70)

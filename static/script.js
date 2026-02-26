@@ -34,6 +34,114 @@ document.addEventListener('DOMContentLoaded', function() {
     const generateVoiceBtn = document.getElementById('generateVoiceBtn');
     const textCount = document.getElementById('textCount');
     
+
+    // ========== VOICE CLONE ==========
+
+    // Clone upload area handlers
+    const cloneUploadArea = document.getElementById('cloneUploadArea');
+    const cloneAudioInput = document.getElementById('cloneAudioInput');
+    const cloneFileInfo = document.getElementById('cloneFileInfo');
+    const cloneFileName = document.getElementById('cloneFileName');
+    const cloneVoiceBtn = document.getElementById('cloneVoiceBtn');
+
+	// ==========Voice Clone===========	    
+	    if (cloneUploadArea) {
+	    cloneUploadArea.addEventListener('click', () => {
+	        cloneAudioInput.click();
+	    });
+	    
+	    cloneUploadArea.addEventListener('dragover', (e) => {
+	        e.preventDefault();
+	        cloneUploadArea.classList.add('dragover');
+	    });
+	    
+	    cloneUploadArea.addEventListener('dragleave', () => {
+	        cloneUploadArea.classList.remove('dragover');
+	    });
+	    
+	    cloneUploadArea.addEventListener('drop', (e) => {
+	        e.preventDefault();
+	        cloneUploadArea.classList.remove('dragover');
+	        const files = e.dataTransfer.files;
+	        if (files.length > 0) {
+	            cloneAudioInput.files = files;
+	            handleCloneFileSelect(files[0]);
+	        }
+	    });
+	}
+	
+	if (cloneAudioInput) {
+	    cloneAudioInput.addEventListener('change', (e) => {
+	        if (e.target.files.length > 0) {
+	            handleCloneFileSelect(e.target.files[0]);
+	        }
+	    });
+	}
+	
+	function handleCloneFileSelect(file) {
+	    if (file.type.startsWith('audio/')) {
+	        cloneFileInfo.classList.remove('hidden');
+	        cloneFileName.textContent = file.name;
+	        console.log('Clone audio selected:', file.name);
+	    } else {
+	        alert('Please select an audio file');
+	    }
+	}
+	
+	if (cloneVoiceBtn) {
+	    cloneVoiceBtn.addEventListener('click', cloneVoice);
+	}
+	
+	async function cloneVoice() {
+	    const audioFile = cloneAudioInput.files[0];
+	    const text = document.getElementById('cloneText').value;
+	    
+	    if (!audioFile) {
+	        alert('Please upload a voice sample');
+	        return;
+	    }
+	    
+	    if (!text) {
+	        alert('Please enter text to convert');
+	        return;
+	    }
+	    
+	    showProgressModal('Cloning Voice...');
+	    
+	    const formData = new FormData();
+	    formData.append('audio', audioFile);
+	    formData.append('text', text);
+	    
+	    try {
+	        const response = await fetch('/voice-clone', {
+	            method: 'POST',
+	            body: formData
+	        });
+	        
+	        const data = await response.json();
+	        
+	        if (response.ok) {
+	            hideProgressModal();
+	            
+	            // Show result
+	            const voiceResult = document.getElementById('voiceResult');
+	            const voiceAudio = document.getElementById('voiceAudio');
+	            
+	            voiceResult.classList.remove('hidden');
+	            voiceAudio.src = data.audio_url;
+	            voiceAudio.load();
+	            
+	            alert('Voice cloned successfully!');
+	        } else {
+	            hideProgressModal();
+	            alert('Error: ' + data.error);
+	        }
+	    } catch (error) {
+	        console.error('Clone error:', error);
+	        hideProgressModal();
+	        alert('Voice clone failed: ' + error.message);
+	    }
+	}
     // Check if elements exist
     if (!uploadArea || !videoInput) {
         console.error('Required elements not found!');

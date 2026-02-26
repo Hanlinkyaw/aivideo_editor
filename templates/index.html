@@ -461,6 +461,41 @@
                 </div>
             </div>
             
+	    <!-- templates/index.html ထဲက voicePanel ထဲမှာ ထည့်ပါ -->
+
+	<!-- Voice Clone Section (အပေါ်ဆုံးမှာ ထည့်) -->
+	<div class="voice-clone-section">
+	    <h3>🎭 Voice Clone (Custom Voice)</h3>
+	    <div class="voice-clone-card">
+	        <div class="upload-area" id="cloneUploadArea">
+	            <input type="file" id="cloneAudioInput" accept="audio/*" hidden>
+	            <div class="upload-content">
+	                <span class="upload-icon">🎤</span>
+	                <p>Upload voice sample (3-10 seconds)</p>
+	                <p class="small">WAV, MP3 (Clear voice recording)</p>
+	            </div>
+	        </div>
+	        <div id="cloneFileInfo" class="file-info hidden">
+	            <p><strong>Sample:</strong> <span id="cloneFileName"></span></p>
+	        </div>
+	        
+	        <div class="text-section" style="margin-top: 20px;">
+	            <label>Text to convert:</label>
+	            <textarea id="cloneText" class="form-control" rows="3" placeholder="သင်ပြောချင်တဲ့ စာသားရိုက်ထည့်ပါ..."></textarea>
+	        </div>
+	        
+	        <button class="process-btn" id="cloneVoiceBtn" style="margin-top: 20px;">
+	            <span>🎭 Clone & Generate Voice</span>
+	        </button>
+	    </div>
+	</div>
+	
+	<div class="or-divider">
+	    <span>OR</span>
+	</div>
+	
+	<!-- Old voice generator continues below -->
+            
             <!-- AI Voice Generator Panel -->
             <div class="left-panel hidden" id="voicePanel">
                 <h2>🎤 AI Voice Generator</h2>
