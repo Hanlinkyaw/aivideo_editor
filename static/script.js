@@ -125,16 +125,39 @@ window.hideAllFeatures = function() {
 window.toggleDarkMode = function() {
     console.log('🌓 Toggling dark mode');
     document.body.classList.toggle('dark-mode');
-    const toggle = document.getElementById('themeToggle');
     
-    if (document.body.classList.contains('dark-mode')) {
+    const toggle = document.getElementById('themeToggle');
+    const isDarkMode = document.body.classList.contains('dark-mode');
+    
+    if (isDarkMode) {
         toggle.textContent = '☀️';
+        toggle.title = 'Switch to Light Mode';
         localStorage.setItem('darkMode', 'enabled');
     } else {
         toggle.textContent = '🌙';
+        toggle.title = 'Switch to Dark Mode';
         localStorage.setItem('darkMode', 'disabled');
     }
+    
+    // Update navbar background for dark mode
+    const navbar = document.querySelector('.navbar');
+    if (navbar) {
+        navbar.style.background = isDarkMode ? 'var(--bg-card)' : 'var(--bg-card)';
+    }
 };
+
+// Check saved dark mode preference on load
+document.addEventListener('DOMContentLoaded', function() {
+    // Check if dark mode was enabled
+    if (localStorage.getItem('darkMode') === 'enabled') {
+        document.body.classList.add('dark-mode');
+        const toggle = document.getElementById('themeToggle');
+        if (toggle) {
+            toggle.textContent = '☀️';
+            toggle.title = 'Switch to Light Mode';
+        }
+    }
+});
 
 // ========== INITIALIZE EVENT LISTENERS ==========
 function initEventListeners() {
