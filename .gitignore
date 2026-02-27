@@ -5,3 +5,31 @@ uploads/.DS_Store
 users.db
 venv311/
 venv/
+
+# Virtual Environment
+venv/
+venv311/
+env/
+ENV/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+
+# Mac system
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Project specific
+uploads/*.mp4
+outputs/*.mp4
+users.db
+*.db
