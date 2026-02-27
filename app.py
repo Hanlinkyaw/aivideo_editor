@@ -1473,6 +1473,181 @@ def get_url_info():
         logger.error(f"URL info error: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
+# ==================== VIDEO PREVIEW ====================
+
+@app.route('/preview/<job_id>')
+@login_required
+def get_preview(job_id):
+    """Get video preview"""
+    if job_id in active_jobs and active_jobs[job_id]['user_id'] == current_user.id:
+        job = active_jobs[job_id]
+        if 'input_path' in job and os.path.exists(job['input_path']):
+            return send_file(
+                job['input_path'],
+                mimetype='video/mp4'
+            )
+    return jsonify({'error': 'Preview not available'}), 404
+
+@app.route('/preview-upload', methods=['POST'])
+@login_required
+def preview_upload():
+    """Upload video for preview only (no processing)"""
+    try:
+        if 'video' not in request.files:
+            return jsonify({'error': 'No file uploaded'}), 400
+        
+        file = request.files['video']
+        if not allowed_file(file.filename):
+            return jsonify({'error': 'Invalid file type'}), 400
+        
+        # Generate preview ID
+        preview_id = str(uuid.uuid4())
+        filename = secure_filename(file.filename)
+        
+        # Save file temporarily
+        temp_path = os.path.join(app.config['UPLOAD_FOLDER'], f"preview_{preview_id}_{filename}")
+        file.save(temp_path)
+        
+        # Store in active_jobs for preview
+        active_jobs[preview_id] = {
+            'id': preview_id,
+            'user_id': current_user.id,
+            'filename': filename,
+            'input_path': temp_path,
+            'status': 'preview',
+            'created_at': time.time()
+        }
+        
+        return jsonify({
+            'preview_id': preview_id,
+            'message': 'Preview ready',
+            'filename': filename
+        })
+        
+    except Exception as e:
+        logger.error(f"Preview upload error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+# ==================== VOICE CLONE PANEL ====================
+
+@app.route('/voice-clone-panel', methods=['POST'])
+@login_required
+def voice_clone_panel():
+    """Voice clone from panel"""
+    try:
+        logger.info(f"Voice clone panel request from user {current_user.id}")
+        
+        if 'audio' not in request.files:
+            return jsonify({'error': 'No audio file provided'}), 400
+        
+        text = request.form.get('text', '')
+        if not text:
+            return jsonify({'error': 'No text provided'}), 400
+        
+        audio_file = request.files['audio']
+        
+        job_id = str(uuid.uuid4())
+        
+        # Save uploaded audio sample
+        sample_filename = f"{job_id}_sample.wav"
+        sample_path = os.path.join(app.config['AUDIO_FOLDER'], sample_filename)
+        audio_file.save(sample_path)
+        
+        try:
+            # Initialize TTS with voice cloning
+            tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2", gpu=False)
+            
+            # Generate cloned voice
+            output_filename = f"{job_id}_cloned.wav"
+            output_path = os.path.join(app.config['AUDIO_FOLDER'], output_filename)
+            
+            tts.tts_to_file(
+                text=text,
+                speaker_wav=sample_path,
+                language="my",
+                file_path=output_path
+            )
+            
+            # Save to database
+            voice_id = str(uuid.uuid4())
+            conn = sqlite3.connect('users.db')
+            c = conn.cursor()
+            c.execute("""INSERT INTO voices 
+                         (id, user_id, text, audio_path, language, created_at) 
+                         VALUES (?, ?, ?, ?, ?, ?)""",
+                     (voice_id, current_user.id, text[:100], output_path, 'my-clone', datetime.now()))
+            conn.commit()
+            conn.close()
+            
+            # Cleanup sample file
+            if os.path.exists(sample_path):
+                os.remove(sample_path)
+            
+            return jsonify({
+                'job_id': job_id,
+                'voice_id': voice_id,
+                'audio_url': f"/audio/{output_filename}",
+                'text': text[:100] + ('...' if len(text) > 100 else '')
+            })
+            
+        except Exception as e:
+            # Cleanup on error
+            if os.path.exists(sample_path):
+                os.remove(sample_path)
+            raise e
+        
+    except Exception as e:
+        logger.error(f"Voice clone panel error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+# ==================== FILE CLEANUP ====================
+
+def cleanup_old_files():
+    """Clean up old preview and temporary files"""
+    try:
+        current_time = time.time()
+        # Remove preview files older than 1 hour
+        for job_id, job in list(active_jobs.items()):
+            if job.get('status') == 'preview':
+                if current_time - job['created_at'] > 3600:  # 1 hour
+                    if 'input_path' in job and os.path.exists(job['input_path']):
+                        os.remove(job['input_path'])
+                    del active_jobs[job_id]
+                    logger.info(f"Cleaned up preview job {job_id}")
+    except Exception as e:
+        logger.error(f"Cleanup error: {e}")
+
+# Run cleanup every hour
+def start_cleanup_scheduler():
+    def run_cleanup():
+        while True:
+            time.sleep(3600)  # 1 hour
+            cleanup_old_files()
+    
+    thread = threading.Thread(target=run_cleanup, daemon=True)
+    thread.start()
+
+# Start cleanup scheduler when app starts
+start_cleanup_scheduler()
+
+# ==================== VOICE CLONE WITH ERROR HANDLING ====================
+
+@app.route('/voice-clone-status/<job_id>')
+@login_required
+def voice_clone_status(job_id):
+    """Check voice clone status"""
+    if job_id in active_jobs and active_jobs[job_id]['user_id'] == current_user.id:
+        job = active_jobs[job_id]
+        return jsonify({
+            'status': job.get('status', 'unknown'),
+            'progress': job.get('progress', 0),
+            'error': job.get('error', '')
+        })
+    return jsonify({'error': 'Job not found'}), 404
+
+
+
 if __name__ == '__main__':
     print("\n" + "="*70)
     print("🎬 AI Video Editor Web App - Complete Edition")

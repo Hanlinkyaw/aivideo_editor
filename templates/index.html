@@ -2,63 +2,119 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Video Editor Pro</title>
     <link rel="stylesheet" href="/static/style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Padauk:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Padauk:wght@400;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <!-- Navbar -->
-        <div class="navbar">
-            <div class="nav-brand">🎬 AI Video Editor Pro</div>
+    <!-- Navbar -->
+    <nav class="navbar">
+        <div class="nav-brand">🎬 AI Video Editor Pro</div>
+        <div class="nav-controls">
+            <button class="theme-toggle" id="themeToggle" onclick="toggleDarkMode()">🌙</button>
             <div class="nav-user" id="navUser"></div>
         </div>
-        
-        <h1>AI Video Editor</h1>
-        <p class="subtitle">Professional video editing with AI-powered effects</p>
-        
-        <!-- Feature Selection Buttons -->
-        <div class="feature-selector">
-            <button class="feature-btn active" onclick="showFeature('editor')" id="btnEditor">
-                <span class="feature-icon">🎬</span>
-                <span class="feature-text">Video Editor</span>
-            </button>
-            <button class="feature-btn" onclick="showFeature('transcript')" id="btnTranscript">
-                <span class="feature-icon">📝</span>
-                <span class="feature-text">Transcript Generator</span>
-            </button>
-            <button class="feature-btn" onclick="showFeature('voice')" id="btnVoice">
-                <span class="feature-icon">🎤</span>
-                <span class="feature-text">AI Voice Generator</span>
-            </button>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-content">
+            <h1>AI နည်းပညာဖြင့် <span class="gradient-text">ဗီဒီယိုတည်းဖြတ်ခြင်း</span></h1>
+            <p class="hero-subtitle">အဆင့်မြင့် AI ကိရိယာများဖြင့် သင့်ဗီဒီယိုများကို ပရော်ဖက်ရှင်နယ်အဆင့်အထိ ပြုပြင်နိုင်ပါပြီ။</p>
         </div>
-        
-        <div class="main-content">
-            <!-- Left Panel - Upload & Settings (Hidden by default, shown when feature selected) -->
-            <div class="left-panel" id="editorPanel">
-                <!-- Video Editor Content - Same as before -->
-                <div class="upload-section">
-                    <h2>📁 Upload Video</h2>
-                    <div class="upload-area" id="uploadArea">
-                        <input type="file" id="videoInput" accept="video/*" hidden>
-                        <div class="upload-content">
-                            <span class="upload-icon">📹</span>
-                            <p>Click or drag video to upload</p>
-                            <p class="small">MP4, AVI, MOV, MKV (Max 1024MB)</p>
-                        </div>
-                    </div>
-                    <div id="fileInfo" class="file-info hidden">
-                        <p><strong>Selected:</strong> <span id="fileName"></span></p>
-                        <p><strong>Size:</strong> <span id="fileSize"></span></p>
-                    </div>
-                </div>
-                
+    </section>
+
+    <!-- Features Grid -->
+    <section class="features-grid">
+        <div class="feature-card" onclick="showFeature('editor')">
+            <div class="feature-icon">🎬</div>
+            <h3>Video Editor</h3>
+            <p>ဗီဒီယိုများကို Effect များထည့်ပြီး တည်းဖြတ်နိုင်ပါသည်။ Zoom, Freeze, Mirror စသည့် Effect များပါဝင်သည်။</p>
+        </div>
+
+        <div class="feature-card" onclick="showFeature('downloader')">
+            <div class="feature-icon">📥</div>
+            <h3>Downloader</h3>
+            <p>YouTube, Facebook, TikTok တို့မှ ဗီဒီယိုများကို MP4/MP3 အနေနဲ့ Download ဆွဲနိုင်ပါသည်။</p>
+        </div>
+
+        <div class="feature-card" onclick="showFeature('transcript')">
+            <div class="feature-icon">📝</div>
+            <h3>Transcript Generator</h3>
+            <p>ဗီဒီယိုများမှ မြန်မာစာတမ်းများကို AI ဖြင့် အလိုအလျောက်ထုတ်ယူနိုင်ပါသည်။</p>
+        </div>
+
+        <div class="feature-card" onclick="showFeature('voice')">
+            <div class="feature-icon">🎤</div>
+            <h3>AI Voice Generator</h3>
+            <p>စာသားများကို သဘာဝကျသော အသံအဖြစ်သို့ ပြောင်းလဲနိုင်ပါသည်။</p>
+        </div>
+
+        <div class="feature-card" onclick="showFeature('voice-clone')">
+            <div class="feature-icon">🎭</div>
+            <h3>Voice Clone</h3>
+            <p>သင့်အသံနမူနာဖြင့် AI အသံပွားကာ စာသားများကိုဖတ်ပြနိုင်ပါသည်။</p>
+        </div>
+    </section>
+
+    <!-- Main Content Area (Hidden by default) -->
+    <div class="main-content hidden" id="mainContent">
+        <!-- Feature Navigation -->
+        <div class="feature-nav">
+            <button class="feature-nav-btn" onclick="showFeaturePanel('editor')" id="navEditor">🎬 Video Editor</button>
+            <button class="feature-nav-btn" onclick="showFeaturePanel('downloader')" id="navDownloader">📥 Downloader</button>
+            <button class="feature-nav-btn" onclick="showFeaturePanel('transcript')" id="navTranscript">📝 Transcript</button>
+            <button class="feature-nav-btn" onclick="showFeaturePanel('voice')" id="navVoice">🎤 Voice Gen</button>
+            <button class="feature-nav-btn" onclick="showFeaturePanel('voice-clone')" id="navVoiceClone">🎭 Voice Clone</button>
+            <button class="feature-nav-btn back-btn" onclick="hideAllFeatures()">🏠 Home</button>
+        </div>
+
+        <!-- Video Editor Panel -->
+        <div class="feature-panel hidden" id="editorPanel">
+            <h2>🎬 Video Editor</h2>
+            <div class="panel-content">
+		<!-- Video Editor Panel ထဲက Upload Section အောက်မှာထည့် -->
+		<div class="upload-section">
+		    <div class="upload-area" id="uploadArea">
+		        <input type="file" id="videoInput" accept="video/*" hidden>
+		        <div class="upload-content">
+		            <span class="upload-icon">📹</span>
+		            <p>Click or drag video to upload</p>
+		            <p class="small">MP4, AVI, MOV, MKV (Max 1024MB)</p>
+		        </div>
+		    </div>
+		    <div id="fileInfo" class="file-info hidden">
+		        <p><strong>Selected:</strong> <span id="fileName"></span></p>
+		        <p><strong>Size:</strong> <span id="fileSize"></span></p>
+		    </div>
+		</div>
+		
+		<!-- ===== VIDEO PREVIEW SECTION (အသစ်ထည့်) ===== -->
+		<div class="preview-section hidden" id="previewSection">
+		    <h3>🎬 Video Preview</h3>
+		    <div class="preview-container">
+		        <video id="videoPreview" class="video-preview" controls>
+		            <source src="" type="video/mp4">
+		            Your browser does not support the video tag.
+		        </video>
+		        <div class="preview-controls">
+		            <button class="preview-btn" id="playPauseBtn">▶️ Play</button>
+		            <button class="preview-btn" id="muteBtn">🔊 Mute</button>
+		            <input type="range" id="volumeSlider" min="0" max="1" step="0.1" value="1">
+		        </div>
+		    </div>
+		</div>
+		<!-- ===== PREVIEW SECTION END ===== -->
+		
+		<!-- Timeline Settings နဲ့ Effects တွေက ဒီအောက်မှာဆက်ရှိတယ် -->
+
+
+                             <!-- Timeline Settings -->
                 <div class="settings-section">
-                    <h2>⚙️ Timeline Settings</h2>
-                    
+                    <h3>⚙️ Timeline Settings</h3>
                     <div class="setting-group">
                         <label for="splitTime">Split Every (seconds):</label>
                         <select id="splitTime" class="form-control">
@@ -98,23 +154,24 @@
                         </select>
                     </div>
                 </div>
-                
+
+                <!-- Effects -->
                 <div class="effects-section">
-                    <h2>✨ Effects</h2>
+                    <h3>✨ Effects</h3>
                     
-                    <!-- Zoom Effect Card -->
+                    <!-- Zoom Effect -->
                     <div class="effect-card">
                         <div class="effect-header">
                             <label class="checkbox-label">
-                                <input type="checkbox" id="zoomEnabled" checked>
+                                <input type="checkbox" id="zoomEnabled">
                                 <span>🔍 Zoom Effect</span>
                             </label>
                         </div>
-                        <div class="effect-options" id="zoomOptions">
+                        <div class="effect-options hidden" id="zoomOptions">
                             <div class="option-row">
                                 <label>
-                                    <input type="checkbox" id="zoomTimed" checked>
-                                    <span>Timed Zoom (စက္ကန့်ပိုင်းအလိုက်)</span>
+                                    <input type="checkbox" id="zoomTimed">
+                                    <span>Timed Zoom</span>
                                 </label>
                             </div>
                             <div class="option-row">
@@ -128,73 +185,54 @@
                                 <label>Zoom Factor: <span id="zoomFactorValue">150%</span></label>
                                 <input type="range" id="zoomFactor" min="1.1" max="2.0" step="0.1" value="1.5">
                             </div>
-                            <div class="option-row">
-                                <label>Interval (စက္ကန့်):</label>
-                                <select id="zoomInterval">
-                                    <option value="3">၃ စက္ကန့် တစ်ခါ</option>
-                                    <option value="5">၅ စက္ကန့် တစ်ခါ</option>
-                                    <option value="7" selected>၇ စက္ကန့် တစ်ခါ</option>
-                                    <option value="10">၁၀ စက္ကန့် တစ်ခါ</option>
-                                    <option value="15">၁၅ စက္ကန့် တစ်ခါ</option>
-                                </select>
-                            </div>
-                            <div class="option-row">
-                                <label>Zoom Duration (စက္ကန့်):</label>
-                                <select id="zoomDuration">
-                                    <option value="1">၁ စက္ကန့်</option>
-                                    <option value="2" selected>၂ စက္ကန့်</option>
-                                    <option value="3">၃ စက္ကန့်</option>
-                                    <option value="4">၄ စက္ကန့်</option>
-                                </select>
-                            </div>
                         </div>
                     </div>
-                    
-                    <!-- Freeze Effect Card -->
+
+                    <!-- Freeze Effect -->
                     <div class="effect-card">
                         <div class="effect-header">
                             <label class="checkbox-label">
-                                <input type="checkbox" id="freezeEnabled" checked>
+                                <input type="checkbox" id="freezeEnabled">
                                 <span>❄️ Freeze Effect</span>
                             </label>
                         </div>
-                        <div class="effect-options" id="freezeOptions">
+                        <div class="effect-options hidden" id="freezeOptions">
                             <div class="option-row">
                                 <label>
-                                    <input type="checkbox" id="freezeTimed" checked>
-                                    <span>Timed Freeze (စက္ကန့်ပိုင်းအလိုက်)</span>
+                                    <input type="checkbox" id="freezeTimed">
+                                    <span>Timed Freeze</span>
                                 </label>
                             </div>
                             <div class="option-row">
                                 <label>Freeze Duration:</label>
                                 <select id="freezeDuration">
-                                    <option value="0.5">၀.၅ စက္ကန့်</option>
-                                    <option value="1" selected>၁ စက္ကန့်</option>
-                                    <option value="1.5">၁.၅ စက္ကန့်</option>
-                                    <option value="2">၂ စက္ကန့်</option>
+                                    <option value="0.5">0.5 sec</option>
+                                    <option value="1" selected>1 sec</option>
+                                    <option value="1.5">1.5 sec</option>
+                                    <option value="2">2 sec</option>
                                 </select>
                             </div>
                             <div class="option-row">
-                                <label>Interval (စက္ကန့်):</label>
+                                <label>Interval:</label>
                                 <select id="freezeInterval">
-                                    <option value="3">၃ စက္ကန့် တစ်ခါ</option>
-                                    <option value="5" selected>၅ စက္ကန့် တစ်ခါ</option>
-                                    <option value="7">၇ စက္ကန့် တစ်ခါ</option>
-                                    <option value="10">၁၀ စက္ကန့် တစ်ခါ</option>
+                                    <option value="3">3 sec</option>
+                                    <option value="5" selected>5 sec</option>
+                                    <option value="7">7 sec</option>
+                                    <option value="10">10 sec</option>
                                 </select>
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- Mirror Effect -->
                     <div class="effect-card">
                         <div class="effect-header">
                             <label class="checkbox-label">
-                                <input type="checkbox" id="mirrorEnabled" checked>
+                                <input type="checkbox" id="mirrorEnabled">
                                 <span>🪞 Mirror Effect</span>
                             </label>
                         </div>
-                        <div class="effect-options" id="mirrorOptions">
+                        <div class="effect-options hidden" id="mirrorOptions">
                             <div class="option-row">
                                 <label>Mirror Type:</label>
                                 <select id="mirrorType">
@@ -204,7 +242,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- Rotate Effect -->
                     <div class="effect-card">
                         <div class="effect-header">
@@ -215,7 +253,7 @@
                         </div>
                         <div class="effect-options hidden" id="rotateOptions">
                             <div class="option-row">
-                                <label>Rotate Angle:</label>
+                                <label>Angle:</label>
                                 <select id="rotateAngle">
                                     <option value="90">90°</option>
                                     <option value="180">180°</option>
@@ -224,110 +262,18 @@
                             </div>
                         </div>
                     </div>
-                    
-                    <!-- Blur Effect -->
-                    <div class="effect-card">
-                        <div class="effect-header">
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="blurEnabled">
-                                <span>🌀 Blur Effect</span>
-                            </label>
-                        </div>
-                        <div class="effect-options hidden" id="blurOptions">
-                            <div class="option-row">
-                                <label>Blur Radius:</label>
-                                <input type="range" id="blurRadius" min="1" max="20" value="5">
-                                <span id="blurValue">5</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Glitch Effect -->
-                    <div class="effect-card">
-                        <div class="effect-header">
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="glitchEnabled">
-                                <span>⚡ Glitch Effect</span>
-                            </label>
-                        </div>
-                        <div class="effect-options hidden" id="glitchOptions">
-                            <div class="option-row">
-                                <label>Intensity:</label>
-                                <input type="range" id="glitchIntensity" min="0.05" max="0.3" step="0.05" value="0.1">
-                                <span id="glitchValue">0.1</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Old Film Effect -->
-                    <div class="effect-card">
-                        <div class="effect-header">
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="oldfilmEnabled">
-                                <span>🎞️ Old Film Effect</span>
-                            </label>
-                        </div>
-                        <div class="effect-options hidden" id="oldfilmOptions">
-                            <div class="option-row">
-                                <label>Scratch Intensity:</label>
-                                <input type="range" id="scratchIntensity" min="0.05" max="0.3" step="0.05" value="0.1">
-                                <span id="scratchValue">0.1</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Speed Effect -->
-                    <div class="effect-card">
-                        <div class="effect-header">
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="speedEnabled">
-                                <span>⚡ Speed Effect</span>
-                            </label>
-                        </div>
-                        <div class="effect-options hidden" id="speedOptions">
-                            <div class="option-row">
-                                <label>Speed Type:</label>
-                                <select id="speedType">
-                                    <option value="fast">Speed Up</option>
-                                    <option value="slow">Slow Down</option>
-                                </select>
-                            </div>
-                            <div class="option-row">
-                                <label>Speed Factor:</label>
-                                <input type="range" id="speedFactor" min="1.2" max="3.0" step="0.2" value="1.5">
-                                <span id="speedValue">1.5x</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Audio Effects -->
-                    <div class="effect-card">
-                        <div class="effect-header">
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="noiseReduction">
-                                <span>🔇 Noise Reduction</span>
-                            </label>
-                        </div>
-                        <div class="effect-options hidden" id="noiseOptions">
-                            <div class="option-row">
-                                <label>Strength:</label>
-                                <input type="range" id="noiseStrength" min="0.1" max="1.0" step="0.1" value="0.5">
-                                <span id="noiseValue">0.5</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Text/Title -->
+
+                    <!-- Text Effect -->
                     <div class="effect-card">
                         <div class="effect-header">
                             <label class="checkbox-label">
                                 <input type="checkbox" id="textEnabled">
-                                <span>📝 Add Text/Title</span>
+                                <span>📝 Add Text</span>
                             </label>
                         </div>
                         <div class="effect-options hidden" id="textOptions">
                             <div class="option-row">
-                                <label>Text (Myanmar):</label>
+                                <label>Text:</label>
                                 <input type="text" id="textContent" placeholder="မြန်မာစာရိုက်ပါ" style="font-family: 'Padauk', sans-serif;">
                             </div>
                             <div class="option-row">
@@ -336,303 +282,152 @@
                                     <option value="center">Center</option>
                                     <option value="top">Top</option>
                                     <option value="bottom">Bottom</option>
-                                    <option value="watermark">Watermark</option>
                                 </select>
                             </div>
                             <div class="option-row">
                                 <label>Color:</label>
                                 <input type="color" id="textColor" value="#ffffff">
                             </div>
-                            <div class="option-row">
-                                <label>Size:</label>
-                                <input type="range" id="textSize" min="20" max="100" value="40">
-                                <span id="textSizeValue">40</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Transitions -->
-                    <div class="effect-card">
-                        <div class="effect-header">
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="transitionEnabled">
-                                <span>🔄 Transition Effects</span>
-                            </label>
-                        </div>
-                        <div class="effect-options hidden" id="transitionOptions">
-                            <div class="option-row">
-                                <label>Type:</label>
-                                <select id="transitionType">
-                                    <option value="fade">Fade</option>
-                                    <option value="slide">Slide</option>
-                                    <option value="zoom">Zoom</option>
-                                </select>
-                            </div>
-                            <div class="option-row">
-                                <label>Duration:</label>
-                                <select id="transitionDuration">
-                                    <option value="0.5">0.5 seconds</option>
-                                    <option value="1" selected>1 second</option>
-                                    <option value="1.5">1.5 seconds</option>
-                                    <option value="2">2 seconds</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Background Music -->
-                    <div class="effect-card">
-                        <div class="effect-header">
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="musicEnabled">
-                                <span>🎵 Background Music</span>
-                            </label>
-                        </div>
-                        <div class="effect-options hidden" id="musicOptions">
-                            <div class="option-row">
-                                <label>Music File:</label>
-                                <input type="file" id="musicFile" accept="audio/*">
-                            </div>
-                            <div class="option-row">
-                                <label>Volume:</label>
-                                <input type="range" id="musicVolume" min="0" max="1" step="0.1" value="0.5">
-                                <span id="musicVolumeValue">50%</span>
-                            </div>
                         </div>
                     </div>
                 </div>
-                
+
                 <button class="process-btn" id="processBtn" disabled>
                     <span>🎬 Process Video</span>
                 </button>
             </div>
-            
-            <!-- Transcript Generator Panel -->
-            <div class="left-panel hidden" id="transcriptPanel">
-                <h2>📝 Transcript Generator</h2>
-                <p class="panel-description">Generate Myanmar transcripts from video/audio files or URLs</p>
+        </div>
+
+        <!-- Downloader Panel -->
+        <div class="feature-panel hidden" id="downloaderPanel">
+            <h2>📥 Downloader</h2>
+            <div class="panel-content">
+                <div class="url-section">
+                    <input type="url" id="downloadUrl" class="form-control" 
+                           placeholder="https://www.youtube.com/watch?v=...">
+                </div>
                 
+                <div class="url-preview hidden" id="urlPreview">
+                    <div class="preview-card">
+                        <img id="previewThumbnail" src="" alt="Thumbnail">
+                        <h4 id="previewTitle"></h4>
+                        <p id="previewUploader"></p>
+                        <p id="previewDuration"></p>
+                    </div>
+                </div>
+                
+                <div class="download-settings">
+                    <div class="setting-group">
+                        <label>File Type:</label>
+                        <select id="downloadType" class="form-control">
+                            <option value="mp4">🎬 Video (MP4)</option>
+                            <option value="mp3">🎵 Audio (MP3)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="setting-group" id="qualityGroup">
+                        <label>Quality:</label>
+                        <select id="downloadQuality" class="form-control">
+                            <option value="1080p">1080p</option>
+                            <option value="720p" selected>720p</option>
+                            <option value="480p">480p</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <button class="process-btn" id="downloadBtn">
+                    <span>📥 Download Now</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Transcript Panel -->
+        <div class="feature-panel hidden" id="transcriptPanel">
+            <h2>📝 Transcript Generator</h2>
+            <div class="panel-content">
                 <div class="upload-section">
-                    <h3>Upload File</h3>
                     <div class="upload-area" id="transcriptUploadArea">
                         <input type="file" id="transcriptFileInput" accept="video/*,audio/*" hidden>
                         <div class="upload-content">
                             <span class="upload-icon">📂</span>
-                            <p>Click or drag file to upload</p>
-                            <p class="small">MP4, AVI, MOV, MP3, WAV (Max 500MB)</p>
+                            <p>Upload file</p>
                         </div>
                     </div>
-                    <div id="transcriptFileInfo" class="file-info hidden">
-                        <p><strong>Selected:</strong> <span id="transcriptFileName"></span></p>
-                        <p><strong>Size:</strong> <span id="transcriptFileSize"></span></p>
-                    </div>
                 </div>
                 
-                <div class="or-divider">
-                    <span>OR</span>
-                </div>
+                <div class="or-divider"><span>OR</span></div>
                 
                 <div class="url-section">
-                    <h3>Enter URL</h3>
-                    <input type="url" id="transcriptUrl" class="form-control" placeholder="https://example.com/video.mp4">
+                    <input type="url" id="transcriptUrl" class="form-control" 
+                           placeholder="https://example.com/video.mp4">
                 </div>
                 
-                <div class="language-section">
-                    <h3>Language</h3>
+                <div class="setting-group">
+                    <label>Language:</label>
                     <select id="transcriptLanguage" class="form-control">
-                        <option value="my" selected>မြန်မာ (Myanmar)</option>
+                        <option value="my">မြန်မာ</option>
                         <option value="en">English</option>
-                        <option value="th">ไทย (Thai)</option>
-                        <option value="zh">中文 (Chinese)</option>
                     </select>
                 </div>
                 
                 <button class="process-btn" id="generateTranscriptBtn">
                     <span>📝 Generate Transcript</span>
                 </button>
-                
-                <div class="transcript-result hidden" id="transcriptResult">
-                    <h3>Generated Transcript</h3>
-                    <div class="transcript-content" id="transcriptContent"></div>
-                    <div class="transcript-actions">
-                        <button class="copy-btn" onclick="copyTranscript()">📋 Copy to Clipboard</button>
-                        <button class="download-btn" onclick="downloadTranscript()">💾 Download</button>
-                    </div>
-                </div>
             </div>
-            
-	    <!-- templates/index.html ထဲက voicePanel ထဲမှာ ထည့်ပါ -->
+        </div>
 
-	<!-- Voice Clone Section (အပေါ်ဆုံးမှာ ထည့်) -->
-	<div class="voice-clone-section">
-	    <h3>🎭 Voice Clone (Custom Voice)</h3>
-	    <div class="voice-clone-card">
-	        <div class="upload-area" id="cloneUploadArea">
-	            <input type="file" id="cloneAudioInput" accept="audio/*" hidden>
-	            <div class="upload-content">
-	                <span class="upload-icon">🎤</span>
-	                <p>Upload voice sample (3-10 seconds)</p>
-	                <p class="small">WAV, MP3 (Clear voice recording)</p>
-	            </div>
-	        </div>
-	        <div id="cloneFileInfo" class="file-info hidden">
-	            <p><strong>Sample:</strong> <span id="cloneFileName"></span></p>
-	        </div>
-	        
-	        <div class="text-section" style="margin-top: 20px;">
-	            <label>Text to convert:</label>
-	            <textarea id="cloneText" class="form-control" rows="3" placeholder="သင်ပြောချင်တဲ့ စာသားရိုက်ထည့်ပါ..."></textarea>
-	        </div>
-	        
-	        <button class="process-btn" id="cloneVoiceBtn" style="margin-top: 20px;">
-	            <span>🎭 Clone & Generate Voice</span>
-	        </button>
-	    </div>
-	</div>
-	
-	<div class="or-divider">
-	    <span>OR</span>
-	</div>
-	
-	<!-- Old voice generator continues below -->
-            
-            <!-- AI Voice Generator Panel -->
-            <div class="left-panel hidden" id="voicePanel">
-                <h2>🎤 AI Voice Generator</h2>
-                <p class="panel-description">Convert Myanmar text to natural-sounding AI voice</p>
-                
+        <!-- Voice Generator Panel -->
+        <div class="feature-panel hidden" id="voicePanel">
+            <h2>🎤 AI Voice Generator</h2>
+            <div class="panel-content">
                 <div class="text-section">
-                    <h3>Enter Text</h3>
-                    <textarea id="voiceText" class="form-control" rows="5" placeholder="မြန်မာလိုရိုက်ထည့်ပါ... (ဥပမာ - မင်္ဂလာပါ)"></textarea>
+                    <textarea id="voiceText" class="form-control" rows="4" 
+                              placeholder="မြန်မာလိုရိုက်ထည့်ပါ..."></textarea>
                     <div class="text-counter">
-                        <span id="textCount">0</span>/5000 characters
+                        <span id="textCount">0</span>/5000
                     </div>
                 </div>
                 
-                <div class="voice-settings">
-                    <h3>Voice Settings</h3>
-                    <div class="setting-group">
-                        <label>Language:</label>
-                        <select id="voiceLanguage" class="form-control">
-                            <option value="my" selected>မြန်မာ (Myanmar)</option>
-                            <option value="en">English</option>
-                            <option value="th">ไทย (Thai)</option>
-                        </select>
-                    </div>
-                    <div class="setting-group">
-                        <label>Voice Type:</label>
-                        <select id="voiceType" class="form-control">
-                            <option value="female" selected>အမျိုးသမီး (Female)</option>
-                            <option value="male">အမျိုးသား (Male)</option>
-                        </select>
-                    </div>
+                <div class="setting-group">
+                    <label>Voice Type:</label>
+                    <select id="voiceType" class="form-control">
+                        <option value="female">အမျိုးသမီး</option>
+                        <option value="male">အမျိုးသား</option>
+                    </select>
                 </div>
                 
                 <button class="process-btn" id="generateVoiceBtn">
                     <span>🎤 Generate Voice</span>
                 </button>
-                
-                <div class="voice-result hidden" id="voiceResult">
-                    <h3>Generated Voice</h3>
-                    <audio id="voiceAudio" controls class="voice-player">
-                        <source src="" type="audio/mpeg">
-                        Your browser does not support the audio element.
-                    </audio>
-                    <div class="voice-actions">
-                        <button class="download-btn" onclick="downloadVoice()">💾 Download Audio</button>
+            </div>
+        </div>
+
+        <!-- Voice Clone Panel -->
+        <div class="feature-panel hidden" id="voiceClonePanel">
+            <h2>🎭 Voice Clone</h2>
+            <div class="panel-content">
+                <div class="upload-section">
+                    <div class="upload-area" id="cloneUploadArea">
+                        <input type="file" id="cloneAudioInput" accept="audio/*" hidden>
+                        <div class="upload-content">
+                            <span class="upload-icon">🎤</span>
+                            <p>Upload voice sample</p>
+                        </div>
                     </div>
                 </div>
-            </div>
-            
-
-
-	    <!-- Downloader Panel (New Feature) -->
-<div class="left-panel hidden" id="downloaderPanel">
-    <h2>📥 Video/Audio Downloader</h2>
-    <p class="panel-description">Download from YouTube, Facebook, TikTok, and more</p>
-    
-    <div class="url-section">
-        <h3>Enter URL</h3>
-        <input type="url" id="downloadUrl" class="form-control" 
-               placeholder="https://www.youtube.com/watch?v=...">
-        <p class="small">Support: YouTube, Facebook, TikTok, Instagram, Twitter, Vimeo</p>
-    </div>
-    
-    <div class="url-preview hidden" id="urlPreview">
-        <div class="preview-card">
-            <img id="previewThumbnail" src="" alt="Thumbnail" style="max-width: 100%; border-radius: 10px;">
-            <h4 id="previewTitle"></h4>
-            <p id="previewUploader"></p>
-            <p id="previewDuration"></p>
-        </div>
-    </div>
-    
-    <div class="download-settings">
-        <h3>Download Settings</h3>
-        
-        <div class="setting-group">
-            <label>File Type:</label>
-            <select id="downloadType" class="form-control">
-                <option value="mp4" selected>🎬 Video (MP4)</option>
-                <option value="mp3">🎵 Audio (MP3)</option>
-            </select>
-        </div>
-        
-        <div class="setting-group" id="qualityGroup">
-            <label>Quality:</label>
-            <select id="downloadQuality" class="form-control">
-                <option value="1080p">1080p Full HD</option>
-                <option value="720p" selected>720p HD</option>
-                <option value="480p">480p SD</option>
-                <option value="best">Best Available</option>
-            </select>
-        </div>
-    </div>
-    
-    <button class="process-btn" id="downloadBtn">
-        <span>📥 Download Now</span>
-    </button>
-    
-    <div class="download-result hidden" id="downloadResult">
-        <h3>Download Complete!</h3>
-        <div class="download-actions">
-            <a href="#" id="downloadLink" class="download-btn">💾 Save File</a>
-            <button class="copy-btn" onclick="showDownloader()">📋 Download Another</button>
-        </div>
-    </div>
-</div>
-
-<!-- Update Feature Selector Buttons -->
-<div class="feature-selector">
-    <button class="feature-btn active" onclick="showFeature('editor')" id="btnEditor">
-        <span class="feature-icon">🎬</span>
-        <span class="feature-text">Video Editor</span>
-    </button>
-    <button class="feature-btn" onclick="showFeature('downloader')" id="btnDownloader">
-        <span class="feature-icon">📥</span>
-        <span class="feature-text">Downloader</span>
-    </button>
-    <button class="feature-btn" onclick="showFeature('transcript')" id="btnTranscript">
-        <span class="feature-icon">📝</span>
-        <span class="feature-text">Transcript</span>
-    </button>
-    <button class="feature-btn" onclick="showFeature('voice')" id="btnVoice">
-        <span class="feature-icon">🎤</span>
-        <span class="feature-text">Voice</span>
-    </button>
-</div>
-
-
-            <!-- Right Panel - Jobs & Progress -->
-            <div class="right-panel">
-                <h2>📊 Recent Jobs</h2>
-                <div id="jobsList" class="jobs-list">
-                    <p class="no-jobs">No active jobs</p>
+                
+                <div class="text-section">
+                    <textarea id="cloneText" class="form-control" rows="3" 
+                              placeholder="စာသားရိုက်ထည့်ပါ..."></textarea>
                 </div>
+                
+                <button class="process-btn" id="cloneVoiceBtn">
+                    <span>🎭 Clone Voice</span>
+                </button>
             </div>
         </div>
     </div>
-    
+
     <!-- Progress Modal -->
     <div id="progressModal" class="modal hidden">
         <div class="modal-content">
@@ -648,10 +443,7 @@
             </div>
         </div>
     </div>
-    
-    <!-- Theme Toggle -->
-    <button class="theme-toggle" onclick="toggleDarkMode()" id="themeToggle">🌙</button>
-    
+
     <script src="/static/script.js"></script>
 </body>
 </html>

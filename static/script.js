@@ -1,250 +1,125 @@
 // ========================================
-// AI Video Editor - Complete JavaScript
-// Includes: Video Editor, Transcript Generator, AI Voice Generator
+// AI Video Editor Pro - Complete JavaScript
+// Version: 2.0 (with Home Page & Video Preview)
 // ========================================
 
-// Global variables
+// ========== GLOBAL VARIABLES ==========
 let currentJobId = null;
 let statusInterval = null;
 let currentTranscriptId = null;
 let currentVoiceId = null;
+let currentDownloadJobId = null;
+let previewVideo = null;
+let currentPreviewId = null;
+let previewCleanupTimer = null;
 
+// ========== DOM CONTENT LOADED ==========
 document.addEventListener('DOMContentLoaded', function() {
     console.log('✅ DOM loaded - Initializing...');
     
+    // Check login status first
+    checkLoginStatus();
+    
+    // Initialize all event listeners
+    initEventListeners();
+    
+    // Load jobs list
+    loadJobs();
+    setInterval(loadJobs, 3000);
+    
+    // Check saved dark mode preference
+    if (localStorage.getItem('darkMode') === 'enabled') {
+        document.body.classList.add('dark-mode');
+        const toggle = document.getElementById('themeToggle');
+        if (toggle) toggle.textContent = '☀️';
+    }
+});
 
-// Check saved dark mode preference
-if (localStorage.getItem('darkMode') === 'enabled') {
-    document.body.classList.add('dark-mode');
-    const toggle = document.getElementById('themeToggle');
-    if (toggle) toggle.textContent = '☀️';
+// ========== INITIALIZE ALL EVENT LISTENERS ==========
+function initEventListeners() {
+    // Theme Toggle
+    const themeToggle = document.getElementById('themeToggle');
+    if (themeToggle) {
+        themeToggle.addEventListener('click', toggleDarkMode);
+    }
+    
+    // ===== VIDEO EDITOR ELEMENTS =====
+    initVideoEditorListeners();
+    
+    // ===== TRANSCRIPT ELEMENTS =====
+    initTranscriptListeners();
+    
+    // ===== VOICE GENERATOR ELEMENTS =====
+    initVoiceListeners();
+    
+    // ===== VOICE CLONE ELEMENTS =====
+    initVoiceCloneListeners();
+    
+    // ===== DOWNLOADER ELEMENTS =====
+    initDownloaderListeners();
+    
+    // ===== MODAL ELEMENTS =====
+    initModalListeners();
+    
+    // ===== EFFECT TOGGLES =====
+    initEffectToggles();
+    
+    // ===== RANGE INPUTS =====
+    initRangeInputs();
 }
-    // Get elements
+
+// ========== VIDEO EDITOR LISTENERS ==========
+function initVideoEditorListeners() {
     const uploadArea = document.getElementById('uploadArea');
     const videoInput = document.getElementById('videoInput');
-    const fileInfo = document.getElementById('fileInfo');
-    const fileName = document.getElementById('fileName');
-    const fileSize = document.getElementById('fileSize');
     const processBtn = document.getElementById('processBtn');
     
-    // Transcript elements
+    if (uploadArea && videoInput) {
+        // Click to upload
+        uploadArea.addEventListener('click', () => {
+            videoInput.click();
+        });
+        
+        // Drag and drop
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                videoInput.files = files;
+                handleVideoSelect(files[0]);
+            }
+        });
+        
+        // File input change
+        videoInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleVideoSelect(e.target.files[0]);
+            }
+        });
+    }
+    
+    if (processBtn) {
+        processBtn.addEventListener('click', uploadVideo);
+    }
+}
+
+// ========== TRANSCRIPT LISTENERS ==========
+function initTranscriptListeners() {
     const transcriptUploadArea = document.getElementById('transcriptUploadArea');
     const transcriptFileInput = document.getElementById('transcriptFileInput');
-    const transcriptFileInfo = document.getElementById('transcriptFileInfo');
-    const transcriptFileName = document.getElementById('transcriptFileName');
-    const transcriptFileSize = document.getElementById('transcriptFileSize');
-    const transcriptUrl = document.getElementById('transcriptUrl');
     const generateTranscriptBtn = document.getElementById('generateTranscriptBtn');
     
-    // Voice elements
-    const voiceText = document.getElementById('voiceText');
-    const generateVoiceBtn = document.getElementById('generateVoiceBtn');
-    const textCount = document.getElementById('textCount');
-    
-
-    // ========== VOICE CLONE ==========
-
-    // Clone upload area handlers
-    const cloneUploadArea = document.getElementById('cloneUploadArea');
-    const cloneAudioInput = document.getElementById('cloneAudioInput');
-    const cloneFileInfo = document.getElementById('cloneFileInfo');
-    const cloneFileName = document.getElementById('cloneFileName');
-    const cloneVoiceBtn = document.getElementById('cloneVoiceBtn');
-
-	// ==========Voice Clone===========	    
-	    if (cloneUploadArea) {
-	    cloneUploadArea.addEventListener('click', () => {
-	        cloneAudioInput.click();
-	    });
-	    
-	    cloneUploadArea.addEventListener('dragover', (e) => {
-	        e.preventDefault();
-	        cloneUploadArea.classList.add('dragover');
-	    });
-	    
-	    cloneUploadArea.addEventListener('dragleave', () => {
-	        cloneUploadArea.classList.remove('dragover');
-	    });
-	    
-	    cloneUploadArea.addEventListener('drop', (e) => {
-	        e.preventDefault();
-	        cloneUploadArea.classList.remove('dragover');
-	        const files = e.dataTransfer.files;
-	        if (files.length > 0) {
-	            cloneAudioInput.files = files;
-	            handleCloneFileSelect(files[0]);
-	        }
-	    });
-	}
-	
-	if (cloneAudioInput) {
-	    cloneAudioInput.addEventListener('change', (e) => {
-	        if (e.target.files.length > 0) {
-	            handleCloneFileSelect(e.target.files[0]);
-	        }
-	    });
-	}
-	
-	function handleCloneFileSelect(file) {
-	    if (file.type.startsWith('audio/')) {
-	        cloneFileInfo.classList.remove('hidden');
-	        cloneFileName.textContent = file.name;
-	        console.log('Clone audio selected:', file.name);
-	    } else {
-	        alert('Please select an audio file');
-	    }
-	}
-	
-	if (cloneVoiceBtn) {
-	    cloneVoiceBtn.addEventListener('click', cloneVoice);
-	}
-	
-	async function cloneVoice() {
-	    const audioFile = cloneAudioInput.files[0];
-	    const text = document.getElementById('cloneText').value;
-	    
-	    if (!audioFile) {
-	        alert('Please upload a voice sample');
-	        return;
-	    }
-	    
-	    if (!text) {
-	        alert('Please enter text to convert');
-	        return;
-	    }
-	    
-	    showProgressModal('Cloning Voice...');
-	    
-	    const formData = new FormData();
-	    formData.append('audio', audioFile);
-	    formData.append('text', text);
-	    
-	    try {
-	        const response = await fetch('/voice-clone', {
-	            method: 'POST',
-	            body: formData
-	        });
-	        
-	        const data = await response.json();
-	        
-	        if (response.ok) {
-	            hideProgressModal();
-	            
-	            // Show result
-	            const voiceResult = document.getElementById('voiceResult');
-	            const voiceAudio = document.getElementById('voiceAudio');
-	            
-	            voiceResult.classList.remove('hidden');
-	            voiceAudio.src = data.audio_url;
-	            voiceAudio.load();
-	            
-	            alert('Voice cloned successfully!');
-	        } else {
-	            hideProgressModal();
-	            alert('Error: ' + data.error);
-	        }
-	    } catch (error) {
-	        console.error('Clone error:', error);
-	        hideProgressModal();
-	        alert('Voice clone failed: ' + error.message);
-	    }
-	}
-    // Check if elements exist
-    if (!uploadArea || !videoInput) {
-        console.error('Required elements not found!');
-        return;
-    }
-    
-   // ==========NEW FEATURE SELECTION ==========
-window.showFeature = function(feature) {
-    // Update buttons
-    document.querySelectorAll('.feature-btn').forEach(btn => {
-        btn.classList.remove('active');
-    });
-    
-    // Map feature names to button IDs
-    const buttonMap = {
-        'editor': 'btnEditor',
-        'downloader': 'btnDownloader',
-        'transcript': 'btnTranscript',
-        'voice': 'btnVoice'
-    };
-    
-    const btnId = buttonMap[feature];
-    if (btnId) {
-        document.getElementById(btnId).classList.add('active');
-    }
-    
-    // Show selected panel
-    document.getElementById('editorPanel').classList.add('hidden');
-    document.getElementById('downloaderPanel').classList.add('hidden');
-    document.getElementById('transcriptPanel').classList.add('hidden');
-    document.getElementById('voicePanel').classList.add('hidden');
-    
-    document.getElementById(`${feature}Panel`).classList.remove('hidden');
-};
- 
-    // ========== VIDEO EDITOR UPLOAD ==========
-    
-    // Click to upload
-    uploadArea.addEventListener('click', () => {
-        console.log('Upload area clicked');
-        videoInput.click();
-    });
-    
-    // Drag and drop
-    uploadArea.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        uploadArea.classList.add('dragover');
-    });
-    
-    uploadArea.addEventListener('dragleave', () => {
-        uploadArea.classList.remove('dragover');
-    });
-    
-    uploadArea.addEventListener('drop', (e) => {
-        e.preventDefault();
-        uploadArea.classList.remove('dragover');
-        const files = e.dataTransfer.files;
-        if (files.length > 0) {
-            console.log('File dropped:', files[0].name);
-            videoInput.files = files;
-            handleFileSelect(files[0]);
-        }
-    });
-    
-    // File input change
-    videoInput.addEventListener('change', (e) => {
-        if (e.target.files.length > 0) {
-            console.log('File selected:', e.target.files[0].name);
-            handleFileSelect(e.target.files[0]);
-        }
-    });
-    
-    // Handle file selection
-    function handleFileSelect(file) {
-        if (file.type.startsWith('video/')) {
-            if (fileInfo) fileInfo.classList.remove('hidden');
-            if (fileName) fileName.textContent = file.name;
-            if (fileSize) fileSize.textContent = formatFileSize(file.size);
-            if (processBtn) processBtn.disabled = false;
-            console.log('File accepted:', file.name);
-        } else {
-            alert('Please select a video file');
-            console.log('File rejected:', file.type);
-        }
-    }
-    
-    // Format file size
-    function formatFileSize(bytes) {
-        if (bytes < 1024) return bytes + ' B';
-        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
-        return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
-    }
-    
-    // ========== TRANSCRIPT UPLOAD ==========
-    
-    if (transcriptUploadArea) {
+    if (transcriptUploadArea && transcriptFileInput) {
         transcriptUploadArea.addEventListener('click', () => {
             transcriptFileInput.click();
         });
@@ -267,9 +142,7 @@ window.showFeature = function(feature) {
                 handleTranscriptFileSelect(files[0]);
             }
         });
-    }
-    
-    if (transcriptFileInput) {
+        
         transcriptFileInput.addEventListener('change', (e) => {
             if (e.target.files.length > 0) {
                 handleTranscriptFileSelect(e.target.files[0]);
@@ -277,14 +150,16 @@ window.showFeature = function(feature) {
         });
     }
     
-    function handleTranscriptFileSelect(file) {
-        if (transcriptFileInfo) transcriptFileInfo.classList.remove('hidden');
-        if (transcriptFileName) transcriptFileName.textContent = file.name;
-        if (transcriptFileSize) transcriptFileSize.textContent = formatFileSize(file.size);
-        console.log('Transcript file accepted:', file.name);
+    if (generateTranscriptBtn) {
+        generateTranscriptBtn.addEventListener('click', generateTranscript);
     }
-    
-    // ========== VOICE TEXT COUNTER ==========
+}
+
+// ========== VOICE GENERATOR LISTENERS ==========
+function initVoiceListeners() {
+    const voiceText = document.getElementById('voiceText');
+    const textCount = document.getElementById('textCount');
+    const generateVoiceBtn = document.getElementById('generateVoiceBtn');
     
     if (voiceText && textCount) {
         voiceText.addEventListener('input', function() {
@@ -298,9 +173,112 @@ window.showFeature = function(feature) {
         });
     }
     
-    // ========== EFFECT TOGGLES ==========
+    if (generateVoiceBtn) {
+        generateVoiceBtn.addEventListener('click', generateVoice);
+    }
+}
+
+// ========== VOICE CLONE LISTENERS ==========
+function initVoiceCloneListeners() {
+    const cloneUploadArea = document.getElementById('cloneUploadArea');
+    const cloneAudioInput = document.getElementById('cloneAudioInput');
+    const cloneVoiceBtn = document.getElementById('cloneVoiceBtn');
     
-    // Toggle effect options when clicking on header
+    if (cloneUploadArea && cloneAudioInput) {
+        cloneUploadArea.addEventListener('click', () => {
+            cloneAudioInput.click();
+        });
+        
+        cloneUploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            cloneUploadArea.classList.add('dragover');
+        });
+        
+        cloneUploadArea.addEventListener('dragleave', () => {
+            cloneUploadArea.classList.remove('dragover');
+        });
+        
+        cloneUploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            cloneUploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                cloneAudioInput.files = files;
+                handleCloneFileSelect(files[0]);
+            }
+        });
+        
+        cloneAudioInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleCloneFileSelect(e.target.files[0]);
+            }
+        });
+    }
+    
+    if (cloneVoiceBtn) {
+        cloneVoiceBtn.addEventListener('click', cloneVoice);
+    }
+}
+
+// ========== DOWNLOADER LISTENERS ==========
+function initDownloaderListeners() {
+    const downloadUrl = document.getElementById('downloadUrl');
+    const downloadType = document.getElementById('downloadType');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const qualityGroup = document.getElementById('qualityGroup');
+    
+    if (downloadUrl) {
+        let timeoutId;
+        downloadUrl.addEventListener('input', function() {
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => {
+                const url = this.value.trim();
+                if (url && (url.includes('youtube.com') || url.includes('youtu.be') || 
+                            url.includes('facebook.com') || url.includes('tiktok.com'))) {
+                    getUrlInfo(url);
+                } else {
+                    document.getElementById('urlPreview').classList.add('hidden');
+                }
+            }, 1000);
+        });
+    }
+    
+    if (downloadType && qualityGroup) {
+        downloadType.addEventListener('change', function() {
+            if (this.value === 'mp3') {
+                qualityGroup.style.display = 'none';
+            } else {
+                qualityGroup.style.display = 'block';
+            }
+        });
+    }
+    
+    if (downloadBtn) {
+        downloadBtn.addEventListener('click', startDownload);
+    }
+}
+
+// ========== MODAL LISTENERS ==========
+function initModalListeners() {
+    const closeModalBtn = document.getElementById('closeModalBtn');
+    const cancelJobBtn = document.getElementById('cancelJobBtn');
+    
+    if (closeModalBtn) {
+        closeModalBtn.addEventListener('click', hideProgressModal);
+    }
+    
+    if (cancelJobBtn) {
+        cancelJobBtn.addEventListener('click', function() {
+            const jobId = this.getAttribute('data-job-id');
+            if (jobId) {
+                cancelJob(jobId);
+            }
+        });
+    }
+}
+
+// ========== EFFECT TOGGLES ==========
+function initEffectToggles() {
     document.querySelectorAll('.effect-header').forEach(header => {
         header.addEventListener('click', function(e) {
             if (e.target.type !== 'checkbox') {
@@ -348,8 +326,18 @@ window.showFeature = function(feature) {
         });
     }
     
-    // ========== RANGE INPUT DISPLAYS ==========
-    
+    // Text enabled checkbox
+    const textEnabled = document.getElementById('textEnabled');
+    if (textEnabled) {
+        textEnabled.addEventListener('change', function() {
+            const options = document.getElementById('textOptions');
+            if (options) options.classList.toggle('hidden', !this.checked);
+        });
+    }
+}
+
+// ========== RANGE INPUTS ==========
+function initRangeInputs() {
     // Zoom factor display
     const zoomFactor = document.getElementById('zoomFactor');
     const zoomFactorValue = document.getElementById('zoomFactorValue');
@@ -367,52 +355,261 @@ window.showFeature = function(feature) {
             blurValue.textContent = this.value;
         });
     }
+}
+
+// ========== FEATURE NAVIGATION ==========
+window.showFeature = function(feature) {
+    // Hide hero section and features grid
+    document.querySelector('.hero').classList.add('hidden');
+    document.querySelector('.features-grid').classList.add('hidden');
     
-    // ========== PROCESS BUTTONS ==========
+    // Show main content
+    document.getElementById('mainContent').classList.remove('hidden');
     
-    if (processBtn) {
-        processBtn.addEventListener('click', uploadVideo);
+    // Show the selected feature panel
+    showFeaturePanel(feature);
+};
+
+window.showFeaturePanel = function(feature) {
+    // Clean up preview if leaving editor
+    if (feature !== 'editor') {
+        cleanupPreview();
     }
     
-    if (generateTranscriptBtn) {
-        generateTranscriptBtn.addEventListener('click', generateTranscript);
+    // Hide all feature panels
+    document.querySelectorAll('.feature-panel').forEach(panel => {
+        panel.classList.add('hidden');
+    });
+    
+    // Show selected panel
+    const panelId = `${feature}Panel`;
+    const panel = document.getElementById(panelId);
+    if (panel) {
+        panel.classList.remove('hidden');
     }
     
-    if (generateVoiceBtn) {
-        generateVoiceBtn.addEventListener('click', generateVoice);
+    // Update active state on nav buttons
+    document.querySelectorAll('.feature-nav-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    const navBtnId = `nav${feature.charAt(0).toUpperCase()}${feature.slice(1)}`;
+    const navBtn = document.getElementById(navBtnId);
+    if (navBtn) {
+        navBtn.classList.add('active');
     }
+};
+
+window.hideAllFeatures = function() {
+    // Show hero section and features grid
+    document.querySelector('.hero').classList.remove('hidden');
+    document.querySelector('.features-grid').classList.remove('hidden');
     
-    // ========== CLOSE MODAL BUTTON ==========
+    // Hide main content
+    document.getElementById('mainContent').classList.add('hidden');
     
-    const closeModalBtn = document.getElementById('closeModalBtn');
-    if (closeModalBtn) {
-        closeModalBtn.addEventListener('click', hideProgressModal);
+    // Clean up preview
+    cleanupPreview();
+};
+
+// ========== VIDEO PREVIEW FUNCTIONS ==========
+function handleVideoSelect(file) {
+    if (file.type.startsWith('video/')) {
+        // Show file info
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const fileSize = document.getElementById('fileSize');
+        const processBtn = document.getElementById('processBtn');
+        
+        if (fileInfo) fileInfo.classList.remove('hidden');
+        if (fileName) fileName.textContent = file.name;
+        if (fileSize) fileSize.textContent = formatFileSize(file.size);
+        if (processBtn) processBtn.disabled = false;
+        
+        // Create preview
+        createVideoPreview(file);
+        
+        console.log('File accepted:', file.name);
+    } else {
+        alert('Please select a video file');
     }
+}
+
+async function createVideoPreview(file) {
+    try {
+        // Show preview section
+        const previewSection = document.getElementById('previewSection');
+        previewSection.classList.remove('hidden');
+        
+        // Create object URL for local preview
+        const videoUrl = URL.createObjectURL(file);
+        const videoPreview = document.getElementById('videoPreview');
+        videoPreview.src = videoUrl;
+        
+        // Store preview video element
+        previewVideo = videoPreview;
+        
+        // Initialize preview controls
+        initPreviewControls();
+        
+        // Upload to server for server-side preview
+        await uploadForServerPreview(file);
+        
+        // Auto-cleanup after 1 hour
+        if (previewCleanupTimer) {
+            clearTimeout(previewCleanupTimer);
+        }
+        previewCleanupTimer = setTimeout(() => {
+            cleanupPreview();
+        }, 3600000); // 1 hour
+        
+    } catch (error) {
+        console.error('Preview creation error:', error);
+    }
+}
+
+async function uploadForServerPreview(file) {
+    const formData = new FormData();
+    formData.append('video', file);
     
-    // ========== CANCEL BUTTON ==========
+    try {
+        const response = await fetch('/preview-upload', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            currentPreviewId = data.preview_id;
+            console.log('Server preview ready:', data);
+        }
+    } catch (error) {
+        console.error('Server preview upload error:', error);
+    }
+}
+
+function initPreviewControls() {
+    if (!previewVideo) return;
     
-    const cancelJobBtn = document.getElementById('cancelJobBtn');
-    if (cancelJobBtn) {
-        cancelJobBtn.addEventListener('click', function() {
-            const jobId = this.getAttribute('data-job-id');
-            if (jobId) {
-                cancelJob(jobId);
+    const playPauseBtn = document.getElementById('playPauseBtn');
+    const muteBtn = document.getElementById('muteBtn');
+    const volumeSlider = document.getElementById('volumeSlider');
+    
+    if (playPauseBtn) {
+        playPauseBtn.addEventListener('click', () => {
+            if (previewVideo.paused) {
+                previewVideo.play();
+                playPauseBtn.textContent = '⏸️ Pause';
+            } else {
+                previewVideo.pause();
+                playPauseBtn.textContent = '▶️ Play';
             }
         });
     }
     
-    // ========== CHECK LOGIN STATUS ==========
+    if (muteBtn) {
+        muteBtn.addEventListener('click', () => {
+            previewVideo.muted = !previewVideo.muted;
+            muteBtn.textContent = previewVideo.muted ? '🔊 Unmute' : '🔇 Mute';
+        });
+    }
     
-    checkLoginStatus();
+    if (volumeSlider) {
+        volumeSlider.addEventListener('input', (e) => {
+            previewVideo.volume = e.target.value;
+        });
+    }
     
-    // ========== LOAD JOBS ==========
+    // Video ended event
+    previewVideo.addEventListener('ended', () => {
+        if (playPauseBtn) playPauseBtn.textContent = '▶️ Play';
+    });
+}
+
+function cleanupPreview() {
+    const previewSection = document.getElementById('previewSection');
+    const videoPreview = document.getElementById('videoPreview');
+    const fileInfo = document.getElementById('fileInfo');
+    const videoInput = document.getElementById('videoInput');
+    const processBtn = document.getElementById('processBtn');
     
-    loadJobs();
-    setInterval(loadJobs, 3000);
-});
+    // Revoke object URL to free memory
+    if (videoPreview && videoPreview.src) {
+        URL.revokeObjectURL(videoPreview.src);
+        videoPreview.src = '';
+    }
+    
+    // Hide preview section
+    if (previewSection) {
+        previewSection.classList.add('hidden');
+    }
+    
+    // Hide file info
+    if (fileInfo) {
+        fileInfo.classList.add('hidden');
+    }
+    
+    // Clear file input
+    if (videoInput) {
+        videoInput.value = '';
+    }
+    
+    // Disable process button
+    if (processBtn) {
+        processBtn.disabled = true;
+    }
+    
+    // Clear preview variables
+    previewVideo = null;
+    currentPreviewId = null;
+    
+    if (previewCleanupTimer) {
+        clearTimeout(previewCleanupTimer);
+        previewCleanupTimer = null;
+    }
+}
+
+// ========== HANDLE FILE SELECT ==========
+function handleTranscriptFileSelect(file) {
+    const fileInfo = document.getElementById('transcriptFileInfo');
+    const fileName = document.getElementById('transcriptFileName');
+    const fileSize = document.getElementById('transcriptFileSize');
+    
+    if (fileInfo) fileInfo.classList.remove('hidden');
+    if (fileName) fileName.textContent = file.name;
+    if (fileSize) fileSize.textContent = formatFileSize(file.size);
+    console.log('Transcript file accepted:', file.name);
+}
+
+function handleCloneFileSelect(file) {
+    if (file.type.startsWith('audio/')) {
+        const fileInfo = document.getElementById('cloneFileInfo');
+        const fileName = document.getElementById('cloneFileName');
+        
+        if (fileInfo) fileInfo.classList.remove('hidden');
+        if (fileName) fileName.textContent = file.name;
+        console.log('Clone audio selected:', file.name);
+    } else {
+        alert('Please select an audio file');
+    }
+}
+
+// ========== FORMAT FILE SIZE ==========
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+}
+
+// ========== TRUNCATE FILENAME ==========
+function truncateFilename(name, maxLength) {
+    if (!name) return '';
+    if (name.length <= maxLength) return name;
+    return name.substr(0, maxLength-3) + '...';
+}
 
 // ========== CHECK LOGIN STATUS ==========
-
 async function checkLoginStatus() {
     try {
         const response = await fetch('/current_user');
@@ -432,10 +629,10 @@ async function checkLoginStatus() {
                 <a href="/register" class="auth-link">Register</a>
             `;
             
-            // Hide panels if not logged in
-            document.getElementById('editorPanel').classList.add('hidden');
-            document.getElementById('transcriptPanel').classList.add('hidden');
-            document.getElementById('voicePanel').classList.add('hidden');
+            // Hide all features if not logged in
+            document.querySelector('.hero').classList.remove('hidden');
+            document.querySelector('.features-grid').classList.remove('hidden');
+            document.getElementById('mainContent').classList.add('hidden');
         }
     } catch (error) {
         console.error('Failed to check login status:', error);
@@ -454,7 +651,6 @@ async function logout() {
 }
 
 // ========== VIDEO EDITOR FUNCTIONS ==========
-
 async function uploadVideo() {
     console.log('uploadVideo function called');
     
@@ -472,6 +668,9 @@ async function uploadVideo() {
     }
     
     console.log('Uploading file:', file.name);
+    
+    // Cleanup preview before processing
+    cleanupPreview();
     
     showProgressModal('Processing Video...');
     
@@ -593,7 +792,6 @@ async function uploadVideo() {
 }
 
 // ========== TRANSCRIPT GENERATOR ==========
-
 async function generateTranscript() {
     console.log('generateTranscript function called');
     
@@ -653,7 +851,6 @@ async function generateTranscript() {
 }
 
 // ========== VOICE GENERATOR ==========
-
 async function generateVoice() {
     console.log('generateVoice function called');
     
@@ -711,363 +908,59 @@ async function generateVoice() {
     }
 }
 
-// ========== TRANSCRIPT ACTIONS ==========
-
-window.copyTranscript = function() {
-    const content = document.getElementById('transcriptContent').textContent;
-    navigator.clipboard.writeText(content).then(() => {
-        alert('Transcript copied to clipboard!');
-    }).catch(err => {
-        console.error('Copy failed:', err);
-    });
-};
-
-window.downloadTranscript = function() {
-    const content = document.getElementById('transcriptContent').textContent;
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `transcript_${new Date().toISOString().slice(0,10)}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-};
-
-// ========== VOICE ACTIONS ==========
-
-window.downloadVoice = function() {
-    const audio = document.getElementById('voiceAudio');
-    if (audio.src) {
-        const a = document.createElement('a');
-        a.href = audio.src;
-        a.download = `voice_${new Date().toISOString().slice(0,10)}.mp3`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-    }
-};
-
-// ========== PROGRESS MODAL FUNCTIONS ==========
-
-function showProgressModal(title = 'Processing...') {
-    console.log('Showing progress modal');
-    const modal = document.getElementById('progressModal');
-    const modalTitle = document.getElementById('modalTitle');
-    const fill = document.getElementById('progressFill');
-    const text = document.getElementById('progressText');
-    const status = document.getElementById('progressStatus');
-    const closeBtn = document.getElementById('closeModalBtn');
-    const cancelBtn = document.getElementById('cancelJobBtn');
+// ========== VOICE CLONE ==========
+async function cloneVoice() {
+    const audioFile = document.getElementById('cloneAudioInput').files[0];
+    const text = document.getElementById('cloneText').value;
     
-    if (modal) {
-        modal.classList.remove('hidden');
-        if (modalTitle) modalTitle.textContent = title;
-        if (fill) fill.style.width = '0%';
-        if (text) text.textContent = '0%';
-        if (status) status.textContent = 'Starting...';
-        if (closeBtn) closeBtn.classList.add('hidden');
-        if (cancelBtn) {
-            cancelBtn.classList.remove('hidden');
-            cancelBtn.disabled = false;
-        }
-        
-        setButtonsEnabled(false);
-    }
-}
-
-function hideProgressModal() {
-    console.log('Hiding progress modal');
-    const modal = document.getElementById('progressModal');
-    const cancelBtn = document.getElementById('cancelJobBtn');
-    const closeBtn = document.getElementById('closeModalBtn');
-    
-    if (modal) {
-        modal.classList.add('hidden');
-    }
-    
-    if (cancelBtn) {
-        cancelBtn.classList.add('hidden');
-        cancelBtn.removeAttribute('data-job-id');
-    }
-    
-    if (closeBtn) {
-        closeBtn.classList.add('hidden');
-    }
-    
-    setButtonsEnabled(true);
-    
-    if (statusInterval) {
-        clearInterval(statusInterval);
-        statusInterval = null;
-    }
-}
-
-function updateProgress(progress, statusText) {
-    console.log(`Progress update: ${progress}% - ${statusText}`);
-    const fill = document.getElementById('progressFill');
-    const text = document.getElementById('progressText');
-    const statusEl = document.getElementById('progressStatus');
-    
-    if (fill) fill.style.width = progress + '%';
-    if (text) text.textContent = progress + '%';
-    if (statusEl) statusEl.textContent = statusText;
-}
-
-// ========== CANCEL JOB ==========
-
-async function cancelJob(jobId) {
-    if (!confirm('Are you sure you want to cancel this job?')) {
+    if (!audioFile) {
+        alert('Please upload a voice sample');
         return;
     }
     
+    if (!text) {
+        alert('Please enter text to convert');
+        return;
+    }
+    
+    showProgressModal('Cloning Voice...');
+    
+    const formData = new FormData();
+    formData.append('audio', audioFile);
+    formData.append('text', text);
+    
     try {
-        const response = await fetch(`/cancel/${jobId}`, {
-            method: 'POST'
+        const response = await fetch('/voice-clone', {
+            method: 'POST',
+            body: formData
         });
         
         const data = await response.json();
         
         if (response.ok) {
-            alert('Job cancelled successfully');
-            
-            if (statusInterval) {
-                clearInterval(statusInterval);
-                statusInterval = null;
-            }
-            
             hideProgressModal();
-            setButtonsEnabled(true);
-            loadJobs();
+            
+            // Show result
+            const voiceResult = document.getElementById('voiceResult');
+            const voiceAudio = document.getElementById('voiceAudio');
+            
+            voiceResult.classList.remove('hidden');
+            voiceAudio.src = data.audio_url;
+            voiceAudio.load();
+            
+            alert('Voice cloned successfully!');
         } else {
-            alert('Error: ' + (data.error || 'Failed to cancel job'));
+            hideProgressModal();
+            alert('Error: ' + data.error);
         }
     } catch (error) {
-        console.error('Cancel error:', error);
-        alert('Failed to cancel job: ' + error.message);
+        console.error('Clone error:', error);
+        hideProgressModal();
+        alert('Voice clone failed: ' + error.message);
     }
 }
-
-// ========== DISABLE/ENABLE BUTTONS ==========
-
-function setButtonsEnabled(enabled) {
-    const processBtn = document.getElementById('processBtn');
-    const generateTranscriptBtn = document.getElementById('generateTranscriptBtn');
-    const generateVoiceBtn = document.getElementById('generateVoiceBtn');
-    const effectCheckboxes = document.querySelectorAll('.effect-header input[type="checkbox"]');
-    const settingControls = document.querySelectorAll('.setting-group select, .setting-group input');
-    
-    if (processBtn) processBtn.disabled = !enabled;
-    if (generateTranscriptBtn) generateTranscriptBtn.disabled = !enabled;
-    if (generateVoiceBtn) generateVoiceBtn.disabled = !enabled;
-    
-    effectCheckboxes.forEach(checkbox => {
-        checkbox.disabled = !enabled;
-    });
-    
-    settingControls.forEach(control => {
-        control.disabled = !enabled;
-    });
-}
-
-// ========== STATUS CHECK ==========
-
-function startStatusCheck(jobId) {
-    console.log('Starting status check for job:', jobId);
-    
-    if (statusInterval) {
-        clearInterval(statusInterval);
-    }
-    
-    statusInterval = setInterval(async () => {
-        try {
-            const response = await fetch(`/status/${jobId}`);
-            const data = await response.json();
-            
-            console.log('Status update:', data);
-            updateProgress(data.progress, data.status);
-            
-            if (data.status === 'completed') {
-                console.log('Job completed');
-                clearInterval(statusInterval);
-                document.getElementById('progressStatus').textContent = 'Complete!';
-                document.getElementById('closeModalBtn').classList.remove('hidden');
-                document.getElementById('cancelJobBtn').classList.add('hidden');
-                
-                setButtonsEnabled(true);
-                loadJobs();
-                
-                if (data.output_url) {
-                    setTimeout(() => {
-                        if (confirm('Download edited video?')) {
-                            window.location.href = data.output_url;
-                        }
-                    }, 500);
-                }
-            } else if (data.status === 'error') {
-                console.error('Job error:', data.error);
-                clearInterval(statusInterval);
-                document.getElementById('progressStatus').textContent = 'Error: ' + (data.error || 'Unknown error');
-                document.getElementById('closeModalBtn').classList.remove('hidden');
-                document.getElementById('cancelJobBtn').classList.add('hidden');
-                
-                setButtonsEnabled(true);
-            } else if (data.status === 'cancelled') {
-                console.log('Job cancelled');
-                clearInterval(statusInterval);
-                document.getElementById('progressStatus').textContent = 'Cancelled';
-                document.getElementById('closeModalBtn').classList.remove('hidden');
-                document.getElementById('cancelJobBtn').classList.add('hidden');
-                
-                setButtonsEnabled(true);
-                loadJobs();
-            }
-        } catch (error) {
-            console.error('Status check failed:', error);
-        }
-    }, 1000);
-}
-
-// ========== LOAD JOBS ==========
-
-async function loadJobs() {
-    try {
-        const response = await fetch('/jobs');
-        const jobs = await response.json();
-        displayJobs(jobs);
-    } catch (error) {
-        console.error('Failed to load jobs:', error);
-    }
-}
-
-function displayJobs(jobs) {
-    const jobsList = document.getElementById('jobsList');
-    
-    if (!jobsList) {
-        console.error('Jobs list element not found');
-        return;
-    }
-    
-    if (jobs.length === 0) {
-        jobsList.innerHTML = '<p class="no-jobs">No active jobs</p>';
-        return;
-    }
-    
-    let html = '';
-    jobs.slice().reverse().forEach(job => {
-        let actions = '';
-        
-        if (job.status === 'completed') {
-            actions = `<button class="download-btn" onclick="window.location.href='/download/${job.id}'">⬇️ Download</button>`;
-        } else if (job.status === 'processing' || job.status === 'queued') {
-            actions = `
-                <span>${job.progress}%</span>
-                <button class="cancel-job-btn" onclick="cancelJob('${job.id}')">✖ Cancel</button>
-            `;
-        } else {
-            actions = `<span>${job.progress}%</span>`;
-        }
-        
-        html += `
-            <div class="job-item ${job.status}">
-                <div class="job-header">
-                    <span class="job-filename">${truncateFilename(job.filename, 20)}</span>
-                    <span class="job-status ${job.status}">${job.status}</span>
-                </div>
-                <div class="job-progress">
-                    <div class="job-progress-fill" style="width: ${job.progress}%"></div>
-                </div>
-                <div class="job-actions">
-                    ${actions}
-                </div>
-                <div class="job-time">${job.created_at || ''}</div>
-            </div>
-        `;
-    });
-    
-    jobsList.innerHTML = html;
-}
-
-function truncateFilename(name, maxLength) {
-    if (!name) return '';
-    if (name.length <= maxLength) return name;
-    return name.substr(0, maxLength-3) + '...';
-}
-
-// ========== DARK MODE TOGGLE ==========
-
-function toggleDarkMode() {
-    document.body.classList.toggle('dark-mode');
-    const toggle = document.getElementById('themeToggle');
-    if (document.body.classList.contains('dark-mode')) {
-        toggle.textContent = '☀️';
-        localStorage.setItem('darkMode', 'enabled');
-    } else {
-        toggle.textContent = '🌙';
-        localStorage.setItem('darkMode', 'disabled');
-    }
-}
-
-// Check saved dark mode preference
-if (localStorage.getItem('darkMode') === 'enabled') {
-    document.body.classList.add('dark-mode');
-    const toggle = document.getElementById('themeToggle');
-    if (toggle) toggle.textContent = '☀️';
-}
-
 
 // ========== DOWNLOADER FUNCTIONS ==========
-
-let currentDownloadJobId = null;
-
-// Elements
-const downloadUrl = document.getElementById('downloadUrl');
-const downloadType = document.getElementById('downloadType');
-const downloadQuality = document.getElementById('downloadQuality');
-const downloadBtn = document.getElementById('downloadBtn');
-const qualityGroup = document.getElementById('qualityGroup');
-const urlPreview = document.getElementById('urlPreview');
-const previewTitle = document.getElementById('previewTitle');
-const previewUploader = document.getElementById('previewUploader');
-const previewDuration = document.getElementById('previewDuration');
-const previewThumbnail = document.getElementById('previewThumbnail');
-const downloadResult = document.getElementById('downloadResult');
-const downloadLink = document.getElementById('downloadLink');
-
-// URL input change - get video info
-if (downloadUrl) {
-    let timeoutId;
-    downloadUrl.addEventListener('input', function() {
-        clearTimeout(timeoutId);
-        timeoutId = setTimeout(() => {
-            const url = this.value.trim();
-            if (url && (url.includes('youtube.com') || url.includes('youtu.be') || 
-                        url.includes('facebook.com') || url.includes('tiktok.com'))) {
-                getUrlInfo(url);
-            } else {
-                urlPreview.classList.add('hidden');
-            }
-        }, 1000);
-    });
-}
-
-// Download type change
-if (downloadType) {
-    downloadType.addEventListener('change', function() {
-        if (this.value === 'mp3') {
-            qualityGroup.style.display = 'none';
-        } else {
-            qualityGroup.style.display = 'block';
-        }
-    });
-}
-
-// Download button click
-if (downloadBtn) {
-    downloadBtn.addEventListener('click', startDownload);
-}
-
 async function getUrlInfo(url) {
     try {
         const formData = new FormData();
@@ -1081,17 +974,17 @@ async function getUrlInfo(url) {
         const data = await response.json();
         
         if (response.ok) {
-            previewTitle.textContent = data.title || 'Unknown Title';
-            previewUploader.textContent = data.uploader || 'Unknown Uploader';
+            document.getElementById('previewTitle').textContent = data.title || 'Unknown Title';
+            document.getElementById('previewUploader').textContent = data.uploader || 'Unknown Uploader';
             if (data.duration) {
                 const minutes = Math.floor(data.duration / 60);
                 const seconds = data.duration % 60;
-                previewDuration.textContent = `Duration: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+                document.getElementById('previewDuration').textContent = `Duration: ${minutes}:${seconds.toString().padStart(2, '0')}`;
             }
             if (data.thumbnail) {
-                previewThumbnail.src = data.thumbnail;
+                document.getElementById('previewThumbnail').src = data.thumbnail;
             }
-            urlPreview.classList.remove('hidden');
+            document.getElementById('urlPreview').classList.remove('hidden');
         }
     } catch (error) {
         console.error('Failed to get video info:', error);
@@ -1099,15 +992,15 @@ async function getUrlInfo(url) {
 }
 
 async function startDownload() {
-    const url = downloadUrl.value.trim();
+    const url = document.getElementById('downloadUrl').value.trim();
     
     if (!url) {
         alert('Please enter a URL');
         return;
     }
     
-    const fileType = downloadType.value;
-    const quality = downloadQuality.value;
+    const fileType = document.getElementById('downloadType').value;
+    const quality = document.getElementById('downloadQuality').value;
     
     showProgressModal('Downloading... (This may take a moment)');
     
@@ -1154,8 +1047,8 @@ function startDownloadStatusCheck(jobId) {
                 hideProgressModal();
                 
                 // Show download link
-                downloadResult.classList.remove('hidden');
-                downloadLink.href = `/download-file/${jobId}`;
+                document.getElementById('downloadResult').classList.remove('hidden');
+                document.getElementById('downloadLink').href = `/download-file/${jobId}`;
                 
                 // Load jobs list
                 loadJobs();
@@ -1171,10 +1064,83 @@ function startDownloadStatusCheck(jobId) {
     }, 1000);
 }
 
-// Show downloader panel function
-window.showDownloader = function() {
-    downloadResult.classList.add('hidden');
-    downloadUrl.value = '';
-    urlPreview.classList.add('hidden');
-    showFeature('downloader');
+// ========== TRANSCRIPT ACTIONS ==========
+window.copyTranscript = function() {
+    const content = document.getElementById('transcriptContent').textContent;
+    navigator.clipboard.writeText(content).then(() => {
+        alert('Transcript copied to clipboard!');
+    }).catch(err => {
+        console.error('Copy failed:', err);
+    });
+};
+
+window.downloadTranscript = function() {
+    const content = document.getElementById('transcriptContent').textContent;
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `transcript_${new Date().toISOString().slice(0,10)}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+};
+
+// ========== VOICE ACTIONS ==========
+window.downloadVoice = function() {
+    const audio = document.getElementById('voiceAudio');
+    if (audio.src) {
+        const a = document.createElement('a');
+        a.href = audio.src;
+        a.download = `voice_${new Date().toISOString().slice(0,10)}.mp3`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+};
+
+// ========== PROGRESS MODAL FUNCTIONS ==========
+function showProgressModal(title = 'Processing...') {
+    console.log('Showing progress modal');
+    const modal = document.getElementById('progressModal');
+    const modalTitle = document.getElementById('modalTitle');
+    const fill = document.getElementById('progressFill');
+    const text = document.getElementById('progressText');
+    const status = document.getElementById('progressStatus');
+    const closeBtn = document.getElementById('closeModalBtn');
+    const cancelBtn = document.getElementById('cancelJobBtn');
+    
+    if (modal) {
+        modal.classList.remove('hidden');
+        if (modalTitle) modalTitle.textContent = title;
+        if (fill) fill.style.width = '0%';
+        if (text) text.textContent = '0%';
+        if (status) status.textContent = 'Starting...';
+        if (closeBtn) closeBtn.classList.add('hidden');
+        if (cancelBtn) {
+            cancelBtn.classList.remove('hidden');
+            cancelBtn.disabled = false;
+        }
+        
+        setButtonsEnabled(false);
+    }
 }
+
+function hideProgressModal() {
+    console.log('Hiding progress modal');
+    const modal = document.getElementById('progressModal');
+    const cancelBtn = document.getElementById('cancelJobBtn');
+    const closeBtn = document.getElementById('closeModalBtn');
+    
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+    
+    if (cancelBtn) {
+        cancelBtn.classList.add('hidden');
+        cancelBtn.removeAttribute('data-job-id');
+    }
+    
+    if (closeBtn) {
+        closeBtn.classList.add
