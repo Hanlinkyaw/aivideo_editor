@@ -3,3 +3,5 @@ uploads/*.mp4
 .DS_Store
 uploads/.DS_Store
 users.db
+venv311/
+venv/
