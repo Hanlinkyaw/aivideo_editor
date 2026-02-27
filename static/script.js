@@ -38,7 +38,7 @@ document.addEventListener('DOMContentLoaded', function() {
 window.showFeature = function(feature) {
     console.log('🎯 Feature clicked:', feature);
     
-    // Hide hero section and features grid
+    // Hide hero and features
     const hero = document.querySelector('.hero');
     const featuresGrid = document.querySelector('.features-grid');
     
@@ -49,14 +49,15 @@ window.showFeature = function(feature) {
     const mainContent = document.getElementById('mainContent');
     if (mainContent) mainContent.classList.remove('hidden');
     
-    // Hide all feature panels
-    const panels = document.querySelectorAll('.feature-panel');
-    panels.forEach(panel => panel.classList.add('hidden'));
+    // Hide all panels
+    document.querySelectorAll('.feature-panel').forEach(p => p.classList.add('hidden'));
     
-    // Show selected panel
-    let panelId = feature + 'Panel';
+    // Show selected panel - FIXED HERE
+    let panelId;
     if (feature === 'voice-clone') {
-        panelId = 'voiceClonePanel';
+        panelId = 'voiceclonePanel';  // Capital C
+    } else {
+        panelId = feature + 'Panel';  // editorPanel, downloaderPanel, etc
     }
     
     const selectedPanel = document.getElementById(panelId);
@@ -65,16 +66,42 @@ window.showFeature = function(feature) {
         console.log('✅ Showing panel:', panelId);
     } else {
         console.error('❌ Panel not found:', panelId);
+        // Try alternative naming
+        if (feature === 'voice-clone') {
+            const altPanel = document.getElementById('voiceclonePanel');
+            if (altPanel) {
+                altPanel.classList.remove('hidden');
+                console.log('✅ Found alternative panel');
+            }
+        }
     }
-    
-    // Update nav buttons if they exist
-    const navBtns = document.querySelectorAll('.feature-nav-btn');
-    navBtns.forEach(btn => btn.classList.remove('active'));
-    
-    const navBtnId = feature === 'voice-clone' ? 'navVoiceClone' : 'nav' + feature.charAt(0).toUpperCase() + feature.slice(1);
-    const navBtn = document.getElementById(navBtnId);
-    if (navBtn) navBtn.classList.add('active');
 };
+
+// ========== LOAD JOBS WITH ERROR HANDLING ==========
+async function loadJobs() {
+    try {
+        const response = await fetch('/jobs');
+        
+        // Check if response is OK
+        if (!response.ok) {
+            console.error('Jobs API returned:', response.status);
+            return;
+        }
+        
+        // Check content type
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            console.error('Response is not JSON:', contentType);
+            return;
+        }
+        
+        const jobs = await response.json();
+        displayJobs(jobs);
+    } catch (error) {
+        console.error('Failed to load jobs:', error);
+        // Don't show error to user, just log it
+    }
+}
 
 window.hideAllFeatures = function() {
     console.log('🏠 Going back to home');

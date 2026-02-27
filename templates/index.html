@@ -70,11 +70,11 @@
     <div class="main-content hidden" id="mainContent">
         <!-- Feature Navigation -->
         <div class="feature-nav">
-            <button class="feature-nav-btn" onclick="showFeaturePanel('editor')" id="navEditor">🎬 Video Editor</button>
-            <button class="feature-nav-btn" onclick="showFeaturePanel('downloader')" id="navDownloader">📥 Downloader</button>
-            <button class="feature-nav-btn" onclick="showFeaturePanel('transcript')" id="navTranscript">📝 Transcript</button>
-            <button class="feature-nav-btn" onclick="showFeaturePanel('voice')" id="navVoice">🎤 Voice Gen</button>
-            <button class="feature-nav-btn" onclick="showFeaturePanel('voice-clone')" id="navVoiceClone">🎭 Voice Clone</button>
+            <button class="feature-nav-btn" onclick="showFeature('editor')" id="navEditor">🎬 Video Editor</button>
+            <button class="feature-nav-btn" onclick="showFeature('downloader')" id="navDownloader">📥 Downloader</button>
+            <button class="feature-nav-btn" onclick="showFeature('transcript')" id="navTranscript">📝 Transcript</button>
+            <button class="feature-nav-btn" onclick="showFeature('voice')" id="navVoice">🎤 Voice Gen</button>
+            <button class="feature-nav-btn" onclick="showFeature('voice-clone')" id="navVoiceClone">🎭 Voice Clone</button>
             <button class="feature-nav-btn back-btn" onclick="hideAllFeatures()">🏠 Home</button>
         </div>
 
@@ -409,7 +409,7 @@
         </div>
 
         <!-- Voice Clone Panel -->
-        <div class="feature-panel hidden" id="voiceClonePanel">
+        <div class="feature-panel hidden" id="voiceclonePanel">
             <h2>🎭 Voice Clone</h2>
             <div class="panel-content">
                 <div class="upload-section">

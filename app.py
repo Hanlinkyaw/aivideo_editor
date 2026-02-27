@@ -1072,17 +1072,29 @@ def download_file(job_id):
 @login_required
 def list_jobs():
     """List user's jobs"""
-    user_jobs = []
-    for job_id, job in active_jobs.items():
-        if job['user_id'] == current_user.id:
-            user_jobs.append({
-                'id': job_id,
-                'filename': job['filename'],
-                'status': job['status'],
-                'progress': job['progress'],
-                'created_at': datetime.fromtimestamp(job['created_at']).strftime('%H:%M:%S')
-            })
-    return jsonify(user_jobs)
+    try:
+        logger.info(f"Jobs list requested by user {current_user.id}")
+        user_jobs = []
+        for job_id, job in active_jobs.items():
+            if job['user_id'] == current_user.id:
+                user_jobs.append({
+                    'id': job_id,
+                    'filename': job.get('filename', 'Unknown'),
+                    'status': job.get('status', 'unknown'),
+                    'progress': job.get('progress', 0),
+                    'created_at': datetime.fromtimestamp(job.get('created_at', time.time())).strftime('%H:%M:%S')
+                })
+        
+        # Sort by newest first
+        user_jobs.sort(key=lambda x: x['created_at'], reverse=True)
+        
+        # Return only last 10 jobs
+        return jsonify(user_jobs[:10])
+        
+    except Exception as e:
+        logger.error(f"Error in list_jobs: {str(e)}")
+        return jsonify([])  # Return empty array on error
+
 
 @app.route('/')
 def index():
