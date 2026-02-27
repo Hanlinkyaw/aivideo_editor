@@ -27,7 +27,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 import numpy as np
 
-# For Transcript Generation
+# ==For Transcript Generation
 try:
     import whisper
     print("✅ Whisper imported successfully")
