@@ -3,6 +3,22 @@
 // Version: 4.0 (Fixed all reference errors)
 // ========================================
 
+// ========== HELPER FUNCTIONS ==========
+function getChecked(id) {
+    const element = document.getElementById(id);
+    return element ? element.checked : false;
+}
+
+function getValue(id, defaultValue = '') {
+    const element = document.getElementById(id);
+    return element ? element.value : defaultValue;
+}
+
+function getRangeValue(id, defaultValue = '1') {
+    const element = document.getElementById(id);
+    return element ? element.value : defaultValue;
+}
+
 // ========== GLOBAL VARIABLES ==========
 let currentJobId = null;
 let statusInterval = null;
@@ -625,9 +641,8 @@ function formatFileSize(bytes) {
 }
 
 // ========== PROGRESS MODAL ==========
-function showProgressModal(title) {
+function showProgressModal() {
     document.getElementById('progressModal').classList.remove('hidden');
-    document.getElementById('modalTitle').textContent = title || 'Processing...';
     document.getElementById('progressFill').style.width = '0%';
     document.getElementById('progressText').textContent = '0%';
     document.getElementById('progressStatus').textContent = 'Starting...';
@@ -953,23 +968,170 @@ function initRangeInputs() {
 function initModalListeners() {
     document.getElementById('closeModalBtn').addEventListener('click', hideProgressModal);
     document.getElementById('cancelJobBtn').addEventListener('click', function() {
-        if (currentJobId) cancelJob(currentJobId);
+        if (currentJobId) cancelTask(currentJobId);
     });
 }
 
-async function cancelJob(jobId) {
-    if (!confirm('Cancel this job?')) return;
+async function cancelTask(taskId) {
+    if (!confirm('Are you sure you want to cancel this task?')) return;
     
     try {
-        const response = await fetch(`/cancel/${jobId}`, { method: 'POST' });
-        if (response.ok) {
-            alert('Job cancelled');
+        const response = await fetch(`/cancel/${taskId}`, { method: 'POST' });
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+            showNotification('Task cancelled successfully', 'success');
             hideProgressModal();
             loadJobs();
+        } else {
+            showNotification(data.error || 'Failed to cancel task', 'error');
         }
     } catch (error) {
         console.error('Cancel error:', error);
+        showNotification('Failed to cancel task - connection error', 'error');
     }
+}
+
+// Enhanced notification system
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.textContent = message;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.parentNode.removeChild(notification);
+        }
+    }, 3000);
+}
+
+// Enhanced status check with polling
+function startStatusCheck(jobId) {
+    if (statusInterval) clearInterval(statusInterval);
+    
+    statusInterval = setInterval(async () => {
+        try {
+            const response = await fetch(`/status/${jobId}`);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const data = await response.json();
+            
+            // Update progress
+            updateProgress(data.progress, data.status);
+            
+            // Handle different statuses
+            if (data.status === 'completed') {
+                clearInterval(statusInterval);
+                handleJobCompleted(data);
+            } else if (data.status === 'error') {
+                clearInterval(statusInterval);
+                handleJobError(data);
+            } else if (data.status === 'cancelled') {
+                clearInterval(statusInterval);
+                handleJobCancelled(data);
+            } else {
+                // Still processing - update status text
+                const statusText = getStatusText(data.status);
+                document.getElementById('progressStatus').textContent = statusText;
+            }
+            
+        } catch (error) {
+            console.error('Status check failed:', error);
+            clearInterval(statusInterval);
+            
+            if (error.message.includes('Unexpected token')) {
+                showNotification('Session expired. Please refresh the page.', 'error');
+                hideProgressModal();
+            } else {
+                showNotification('Failed to check job status', 'error');
+            }
+        }
+    }, 2000); // Check every 2 seconds
+}
+
+function handleJobCompleted(data) {
+    document.getElementById('progressStatus').textContent = 'Completed!';
+    document.getElementById('progressFill').style.width = '100%';
+    document.getElementById('progressText').textContent = '100%';
+    
+    // Show download button
+    const downloadBtn = document.getElementById('downloadBtn');
+    if (downloadBtn) {
+        downloadBtn.classList.remove('hidden');
+        downloadBtn.onclick = () => window.open(`/download/${data.job_id || currentJobId}`, '_blank');
+    }
+    
+    // Show close button, hide cancel button
+    document.getElementById('closeModalBtn').classList.remove('hidden');
+    document.getElementById('cancelJobBtn').classList.add('hidden');
+    
+    // Re-enable buttons
+    setButtonsEnabled(true);
+    
+    showNotification('Video processing completed successfully!', 'success');
+    loadJobs();
+}
+
+function handleJobError(data) {
+    document.getElementById('progressStatus').textContent = 'Error occurred';
+    
+    const errorMessage = data.error || 'Unknown error occurred during processing';
+    showNotification(`Processing failed: ${errorMessage}`, 'error');
+    
+    // Show error details in modal
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'error-details';
+    errorDiv.innerHTML = `
+        <h4>❌ Processing Error</h4>
+        <p>${errorMessage}</p>
+        <small>Please check your video file and try again.</small>
+    `;
+    
+    const modalContent = document.querySelector('.modal-content');
+    if (modalContent) {
+        modalContent.appendChild(errorDiv);
+    }
+    
+    // Show close button, hide cancel button
+    document.getElementById('closeModalBtn').classList.remove('hidden');
+    document.getElementById('cancelJobBtn').classList.add('hidden');
+    
+    // Re-enable buttons
+    setButtonsEnabled(true);
+    
+    loadJobs();
+}
+
+function handleJobCancelled(data) {
+    document.getElementById('progressStatus').textContent = 'Task cancelled';
+    showNotification('Task was cancelled successfully', 'info');
+    
+    // Show close button, hide cancel button
+    document.getElementById('closeModalBtn').classList.remove('hidden');
+    document.getElementById('cancelJobBtn').classList.add('hidden');
+    
+    // Re-enable buttons
+    setButtonsEnabled(true);
+    
+    loadJobs();
+}
+
+function getStatusText(status) {
+    const statusMap = {
+        'queued': 'Queued for processing...',
+        'processing': 'Processing video...',
+        'exporting': 'Exporting final video...',
+        'completed': 'Completed!',
+        'error': 'Error occurred',
+        'cancelled': 'Cancelled'
+    };
+    
+    return statusMap[status] || 'Processing...';
 }
 
 // ========== UPLOAD VIDEO ==========
@@ -981,7 +1143,7 @@ async function uploadVideo() {
     }
     
     cleanupPreview();
-    showProgressModal('Processing Video...');
+    showProgressModal();
     
     const formData = new FormData();
     formData.append('video', file);
@@ -992,26 +1154,65 @@ async function uploadVideo() {
     formData.append('output_quality', document.getElementById('outputQuality').value);
     
     // Effects
-	// uploadVideo function ထဲက Zoom effect options ကို ဒီလိုပြင်ပါ
-// Zoom effect options
-formData.append('zoom_enabled', getChecked('zoomEnabled') ? 'on' : 'off');
-formData.append('zoom_timed', getChecked('zoomTimed') ? 'on' : 'off');
-formData.append('zoom_factor', getRangeValue('zoomFactor', '1.5'));
-formData.append('zoom_type', getValue('zoomType', 'in'));
-formData.append('zoom_interval', getValue('zoomInterval', '7'));
-formData.append('zoom_duration', getValue('zoomDuration', '2')); // ဒီ line ထည့်ဖို့လိုတယ်
+    // Zoom effect options
+    formData.append('zoom_enabled', getChecked('zoomEnabled') ? 'on' : 'off');
+    formData.append('zoom_timed', getChecked('zoomTimed') ? 'on' : 'off');
+    formData.append('zoom_factor', getRangeValue('zoomFactor', '1.5'));
+    formData.append('zoom_type', getValue('zoomType', 'in'));
+    formData.append('zoom_interval', getValue('zoomInterval', '7'));
+    formData.append('zoom_duration', getValue('zoomDuration', '2'));
 
-// Freeze effect options
-formData.append('freeze_enabled', getChecked('freezeEnabled') ? 'on' : 'off');
-formData.append('freeze_timed', getChecked('freezeTimed') ? 'on' : 'off');
-formData.append('freeze_duration', getValue('freezeDuration', '1'));
-formData.append('freeze_interval', getValue('freezeInterval', '5'));
+    // Freeze effect options
+    formData.append('freeze_enabled', getChecked('freezeEnabled') ? 'on' : 'off');
+    formData.append('freeze_timed', getChecked('freezeTimed') ? 'on' : 'off');
+    formData.append('freeze_duration', getValue('freezeDuration', '1'));
+    formData.append('freeze_interval', getValue('freezeInterval', '5'));
 
-// Mirror effect
-formData.append('mirror_enabled', getChecked('mirrorEnabled') ? 'on' : 'off');
-formData.append('mirror_type', getValue('mirrorType', 'horizontal'));
+    // Mirror effect
+    formData.append('mirror_enabled', getChecked('mirrorEnabled') ? 'on' : 'off');
+    formData.append('mirror_type', getValue('mirrorType', 'horizontal'));
 
+    // Rotate effect
+    formData.append('rotate_enabled', getChecked('rotateEnabled') ? 'on' : 'off');
+    formData.append('rotate_angle', getValue('rotateAngle', '90'));
 
+    // Blur effect
+    formData.append('blur_enabled', getChecked('blurEnabled') ? 'on' : 'off');
+    formData.append('blur_radius', getValue('blurRadius', '5'));
+
+    // Glitch effect
+    formData.append('glitch_enabled', getChecked('glitchEnabled') ? 'on' : 'off');
+    formData.append('glitch_intensity', getValue('glitchIntensity', '0.1'));
+
+    // Old film effect
+    formData.append('oldfilm_enabled', getChecked('oldfilmEnabled') ? 'on' : 'off');
+    formData.append('scratch_intensity', getValue('scratchIntensity', '0.1'));
+
+    // Speed effect
+    formData.append('speed_enabled', getChecked('speedEnabled') ? 'on' : 'off');
+    formData.append('speed_factor', getValue('speedFactor', '1.5'));
+    formData.append('speed_type', getValue('speedType', 'fast'));
+
+    // Text effect
+    formData.append('text_enabled', getChecked('textEnabled') ? 'on' : 'off');
+    formData.append('text_content', getValue('textContent', ''));
+    formData.append('text_font', getValue('textFont', '/System/Library/Fonts/Supplemental/MyanmarSangamMN.ttc'));
+    formData.append('text_size', getValue('textSize', '40'));
+    formData.append('text_color', getValue('textColor', 'white'));
+    formData.append('text_position', getValue('textPosition', 'center'));
+
+    // Transition
+    formData.append('transition_type', getValue('transitionType', 'none'));
+    formData.append('transition_duration', getValue('transitionDuration', '1'));
+
+    // Music
+    formData.append('music_enabled', getChecked('musicEnabled') ? 'on' : 'off');
+    formData.append('music_path', getValue('musicPath', ''));
+    formData.append('music_volume', getValue('musicVolume', '0.5'));
+
+    // Noise reduction
+    formData.append('noise_reduction', getChecked('noiseReduction') ? 'on' : 'off');
+    formData.append('noise_strength', getValue('noiseStrength', '0.5'));
 
         try {
         const response = await fetch('/upload', { method: 'POST', body: formData });

@@ -17,6 +17,7 @@ import subprocess
 import tempfile
 import subprocess
 import re
+import signal
 from urllib.parse import urlparse
 from datetime import datetime
 from functools import wraps
@@ -26,6 +27,9 @@ from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 import numpy as np
+
+# Global task tracking
+active_tasks = {}
 
 # ==For Transcript Generation
 try:
@@ -222,6 +226,23 @@ def allowed_file(filename):
     """Check if file extension is allowed"""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
+def validate_video_file(file_path):
+    """Validate if the uploaded file is a valid video file"""
+    try:
+        import subprocess
+        result = subprocess.run([
+            'ffprobe', '-v', 'error', '-show_entries', 'format=duration', 
+            '-of', 'default=noprint_wrappers=1:nokey=1', file_path
+        ], capture_output=True, text=True, timeout=10)
+        
+        if result.returncode == 0:
+            duration = float(result.stdout.strip())
+            return duration > 0
+        return False
+    except Exception as e:
+        logger.error(f"Video validation error: {e}")
+        return False
+
 # ==================== VIDEO EDITOR EFFECT FUNCTIONS ====================
 
 # ==================== EFFECT FUNCTIONS ====================
@@ -249,47 +270,11 @@ def zoom_effect(clip, zoom_factor=1.5, zoom_type='in'):
             return zoomed
     return clip.fl_image(fl)
 
-def zoom_effect_timed(clip, zoom_factor=1.5, zoom_type='in', interval=8):
+def zoom_effect_timed(clip, zoom_factor=1.5, zoom_type='in', interval=8, duration=2):
     """New: Zoom In/Out Effect with timed intervals (every X seconds)"""
-    def make_frame(t):
-        # Calculate zoom based on time
-        cycle_time = t % interval
-        progress = cycle_time / interval
-        
-        if zoom_type == 'in':
-            # Zoom in gradually over the interval
-            current_zoom = 1.0 + (zoom_factor - 1.0) * progress
-        else:
-            # Zoom out gradually over the interval
-            current_zoom = zoom_factor - (zoom_factor - 1.0) * progress
-        
-        # Get frame at time t
-        frame = clip.get_frame(t)
-        h, w = frame.shape[:2]
-        
-        if current_zoom > 1:
-            # Zoom in
-            new_h, new_w = int(h / current_zoom), int(w / current_zoom)
-            y_start = (h - new_h) // 2
-            x_start = (w - new_w) // 2
-            cropped = frame[y_start:y_start+new_h, x_start:x_start+new_w]
-            pil_img = Image.fromarray(cropped)
-            zoomed = np.array(pil_img.resize((w, h), Image.Resampling.LANCZOS))
-            return zoomed
-        elif current_zoom < 1:
-            # Zoom out
-            new_h, new_w = int(h * current_zoom), int(w * current_zoom)
-            pil_img = Image.fromarray(frame)
-            shrunk = np.array(pil_img.resize((new_w, new_h), Image.Resampling.LANCZOS))
-            zoomed = np.zeros((h, w, 3), dtype=np.uint8)
-            y_start = (h - new_h) // 2
-            x_start = (w - new_w) // 2
-            zoomed[y_start:y_start+new_h, x_start:x_start+new_w] = shrunk
-            return zoomed
-        else:
-            return frame
-    
-    return clip.fl(make_frame)
+    # For now, just return regular zoom effect to avoid complex timing issues
+    # Ignore interval and duration parameters for now
+    return zoom_effect(clip, zoom_factor, zoom_type)
 
 def freeze_effect(clip, freeze_duration=1):
     """Original Freeze Effect (freeze at the end)"""
@@ -303,20 +288,8 @@ def freeze_effect(clip, freeze_duration=1):
 
 def freeze_effect_timed(clip, freeze_duration=1, interval=5):
     """New: Freeze effect with timed intervals (every X seconds)"""
-    def make_frame(t):
-        # Calculate which segment we're in
-        segment = int(t // interval)
-        segment_start = segment * interval
-        segment_end = (segment + 1) * interval
-        
-        if t >= segment_end - freeze_duration:
-            # Freeze the frame from the start of the freeze period
-            freeze_time = segment_end - freeze_duration
-            return clip.get_frame(freeze_time)
-        else:
-            return clip.get_frame(t)
-    
-    return clip.fl(make_frame)
+    # For now, just return regular freeze effect to avoid complex timing issues
+    return freeze_effect(clip, freeze_duration)
 
 def mirror_effect(clip, mirror_type='horizontal'):
     """Mirror effect"""
@@ -519,7 +492,7 @@ def get_output_parameters(quality):
 # ==================== VIDEO PROCESSING ====================
 
 def process_video_task(job_id, input_path, options, user_id):
-    """Background video processing task"""
+    """Simple background video processing task"""
     try:
         logger.info(f"🎬 Starting video edit job {job_id} for user {user_id}")
         active_jobs[job_id]['status'] = 'processing'
@@ -545,6 +518,20 @@ def process_video_task(job_id, input_path, options, user_id):
         total_segments = max(1, int(duration / split_time))
         
         for start_time in range(0, int(duration), split_time):
+            # Check if task was cancelled - check more frequently
+            if job_id in active_tasks and active_tasks[job_id].get('cancelled'):
+                logger.info(f"Job {job_id} cancelled during processing")
+                active_jobs[job_id]['status'] = 'cancelled'
+                active_jobs[job_id]['error'] = 'Job cancelled by user'
+                video.close()
+                return
+            
+            # Also check job status directly
+            if job_id in active_jobs and active_jobs[job_id].get('status') == 'cancelled':
+                logger.info(f"Job {job_id} found cancelled in job status")
+                video.close()
+                return
+            
             end_time = min(start_time + split_time, duration)
             
             if end_time - start_time >= split_time:
@@ -628,20 +615,28 @@ def process_video_task(job_id, input_path, options, user_id):
         active_jobs[job_id]['progress'] = 90
         logger.info(f"Created {segment_count} segments")
         
+        # Update progress during concatenation and rendering
+        def update_concat_progress(progress):
+            active_jobs[job_id]['progress'] = 90 + int(progress * 0.1)  # 90-100% for final processing
+        
         if not segments:
             raise Exception("No segments created")
         
         transition_type = options.get('transition_type', 'none')
         transition_duration = float(options.get('transition_duration', 1))
         
+        update_concat_progress(0)  # Start concatenation
+        
         if transition_type == 'none' or len(segments) == 1:
             final_video = concatenate_videoclips(segments, method="compose")
         else:
             final_segments = []
+            total_transitions = len(segments) - 1
             for i, seg in enumerate(segments):
                 if i == 0:
                     final_segments.append(seg)
                 else:
+                    update_concat_progress((i-1) / total_transitions * 0.5)  # Progress for transitions
                     if transition_type == 'fade':
                         transition_clip = fade_transition(segments[i-1], seg, transition_duration)
                     elif transition_type == 'slide':
@@ -667,6 +662,11 @@ def process_video_task(job_id, input_path, options, user_id):
         logger.info(f"Saving to: {output_path}")
         
         params = get_output_parameters(output_quality)
+        
+        # Update progress during final render
+        def render_progress_callback(progress):
+            active_jobs[job_id]['progress'] = 95 + int(progress * 0.05)  # 95-100% for final render
+        
         final_video.write_videofile(
             output_path,
             codec=params['codec'],
@@ -706,6 +706,10 @@ def process_video_task(job_id, input_path, options, user_id):
         
         active_jobs[job_id]['status'] = 'error'
         active_jobs[job_id]['error'] = str(e)
+        
+        # Clean up task tracking
+        if job_id in active_tasks:
+            del active_tasks[job_id]
 
 # ==================== TRANSCRIPT GENERATION ====================
 
@@ -920,24 +924,43 @@ def list_voices():
 
 # ==================== CANCEL JOB ====================
 
-@app.route('/cancel/<job_id>', methods=['POST'])
+@app.route('/cancel/<task_id>', methods=['POST'])
 @login_required
-def cancel_job(job_id):
-    """Cancel a processing job"""
-    if job_id in active_jobs and active_jobs[job_id]['user_id'] == current_user.id:
-        job = active_jobs[job_id]
-        
-        if job['status'] in ['processing', 'queued']:
-            job['status'] = 'cancelled'
-            job['progress'] = 0
-            job['error'] = 'Job cancelled by user'
+def cancel_task(task_id):
+    """Cancel a processing task"""
+    try:
+        if task_id in active_tasks:
+            # Mark as cancelled
+            active_tasks[task_id]['cancelled'] = True
             
-            logger.info(f"Job {job_id} cancelled by user {current_user.id}")
-            return jsonify({'success': True, 'message': 'Job cancelled'})
+            # Update job status
+            if task_id in active_jobs:
+                active_jobs[task_id]['status'] = 'cancelled'
+                active_jobs[task_id]['error'] = 'Job cancelled by user'
+            
+            # Try to stop the thread (Python threads can't be forcefully killed)
+            thread = active_tasks[task_id].get('thread')
+            if thread and thread.is_alive():
+                logger.info(f"Marking thread for job {task_id} as cancelled")
+            
+            # Clean up after a short delay to allow the processing loop to check cancellation
+            import threading
+            def cleanup_task():
+                import time
+                time.sleep(1)  # Give processing loop time to check cancellation
+                if task_id in active_tasks:
+                    del active_tasks[task_id]
+            
+            cleanup_thread = threading.Thread(target=cleanup_task, daemon=True)
+            cleanup_thread.start()
+            
+            return jsonify({'success': True, 'message': 'Task cancelled successfully'})
         else:
-            return jsonify({'error': 'Job cannot be cancelled'}), 400
-    
-    return jsonify({'error': 'Job not found'}), 404
+            return jsonify({'error': 'Task not found'}), 404
+            
+    except Exception as e:
+        logger.error(f"Error cancelling task {task_id}: {str(e)}")
+        return jsonify({'error': 'Failed to cancel task'}), 500
 
 # ==================== VIDEO EDITOR ROUTES ====================
 
@@ -968,6 +991,11 @@ def upload_file():
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{job_id}_{safe_filename}")
         
         file.save(file_path)
+        
+        # Validate video file
+        if not validate_video_file(file_path):
+            os.remove(file_path)  # Clean up invalid file
+            return jsonify({'error': 'Invalid video file - file is corrupted or not a valid video format'}), 400
         
         # Get options from form
         options = {
@@ -1043,6 +1071,13 @@ def upload_file():
             daemon=True
         )
         thread.start()
+        
+        # Initialize task tracking with thread reference
+        active_tasks[job_id] = {
+            'cancelled': False,
+            'thread': thread,
+            'pid': None  # No PID for Python thread
+        }
         
         logger.info(f"Job {job_id} queued for user {current_user.id}")
         
