@@ -124,26 +124,36 @@ window.hideAllFeatures = function() {
 // ========== DARK MODE TOGGLE ==========
 window.toggleDarkMode = function() {
     console.log('🌓 Toggling dark mode');
-    document.body.classList.toggle('dark-mode');
     
+    const body = document.body;
     const toggle = document.getElementById('themeToggle');
-    const isDarkMode = document.body.classList.contains('dark-mode');
+    
+    if (!toggle) {
+        console.error('❌ Theme toggle button not found');
+        return;
+    }
+    
+    // Toggle dark mode class
+    const isDarkMode = body.classList.contains('dark-mode');
     
     if (isDarkMode) {
-        toggle.textContent = '☀️';
-        toggle.title = 'Switch to Light Mode';
-        localStorage.setItem('darkMode', 'enabled');
-    } else {
+        // Switch to light mode
+        body.classList.remove('dark-mode');
         toggle.textContent = '🌙';
         toggle.title = 'Switch to Dark Mode';
         localStorage.setItem('darkMode', 'disabled');
+        console.log('🌞 Switched to light mode');
+    } else {
+        // Switch to dark mode
+        body.classList.add('dark-mode');
+        toggle.textContent = '☀️';
+        toggle.title = 'Switch to Light Mode';
+        localStorage.setItem('darkMode', 'enabled');
+        console.log('🌙 Switched to dark mode');
     }
     
-    // Update navbar background for dark mode
-    const navbar = document.querySelector('.navbar');
-    if (navbar) {
-        navbar.style.background = isDarkMode ? 'var(--bg-card)' : 'var(--bg-card)';
-    }
+    // Force a repaint to ensure styles are applied
+    void body.offsetWidth;
 };
 
 // Check saved dark mode preference on load
@@ -163,10 +173,19 @@ document.addEventListener('DOMContentLoaded', function() {
 function initEventListeners() {
     console.log('🔧 Initializing event listeners');
     
-    // Theme Toggle
+    // Theme Toggle - Remove existing listener and add new one
     const themeToggle = document.getElementById('themeToggle');
     if (themeToggle) {
-        themeToggle.addEventListener('click', toggleDarkMode);
+        // Remove any existing click listeners
+        themeToggle.removeEventListener('click', toggleDarkMode);
+        // Add fresh click listener
+        themeToggle.addEventListener('click', function(e) {
+            e.preventDefault();
+            toggleDarkMode();
+        });
+        console.log('✅ Theme toggle listener attached');
+    } else {
+        console.error('❌ Theme toggle button not found during initialization');
     }
     
     // Back/Home buttons
@@ -827,14 +846,28 @@ async function uploadVideo() {
     formData.append('output_quality', document.getElementById('outputQuality').value);
     
     // Effects
-    formData.append('zoom_enabled', document.getElementById('zoomEnabled').checked ? 'on' : 'off');
-    formData.append('freeze_enabled', document.getElementById('freezeEnabled').checked ? 'on' : 'off');
-    formData.append('mirror_enabled', document.getElementById('mirrorEnabled').checked ? 'on' : 'off');
-    formData.append('rotate_enabled', document.getElementById('rotateEnabled').checked ? 'on' : 'off');
-    formData.append('text_enabled', document.getElementById('textEnabled').checked ? 'on' : 'off');
-    formData.append('text_content', document.getElementById('textContent').value);
-    
-    try {
+	// uploadVideo function ထဲက Zoom effect options ကို ဒီလိုပြင်ပါ
+// Zoom effect options
+formData.append('zoom_enabled', getChecked('zoomEnabled') ? 'on' : 'off');
+formData.append('zoom_timed', getChecked('zoomTimed') ? 'on' : 'off');
+formData.append('zoom_factor', getRangeValue('zoomFactor', '1.5'));
+formData.append('zoom_type', getValue('zoomType', 'in'));
+formData.append('zoom_interval', getValue('zoomInterval', '7'));
+formData.append('zoom_duration', getValue('zoomDuration', '2')); // ဒီ line ထည့်ဖို့လိုတယ်
+
+// Freeze effect options
+formData.append('freeze_enabled', getChecked('freezeEnabled') ? 'on' : 'off');
+formData.append('freeze_timed', getChecked('freezeTimed') ? 'on' : 'off');
+formData.append('freeze_duration', getValue('freezeDuration', '1'));
+formData.append('freeze_interval', getValue('freezeInterval', '5'));
+
+// Mirror effect
+formData.append('mirror_enabled', getChecked('mirrorEnabled') ? 'on' : 'off');
+formData.append('mirror_type', getValue('mirrorType', 'horizontal'));
+
+
+
+        try {
         const response = await fetch('/upload', { method: 'POST', body: formData });
         const data = await response.json();
         

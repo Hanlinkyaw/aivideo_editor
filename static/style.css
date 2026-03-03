@@ -268,6 +268,32 @@ h3 {
     box-shadow: 0 5px 15px rgba(214, 48, 49, 0.3);
 }
 
+/* ========== THEME TOGGLE ========== */
+.theme-toggle {
+    background: var(--bg-card);
+    border: 2px solid var(--border-color);
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    font-size: 1.5rem;
+    cursor: pointer;
+    transition: var(--transition-smooth);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(10px);
+}
+
+.theme-toggle:hover {
+    background: var(--hover-bg);
+    transform: scale(1.1);
+    box-shadow: 0 5px 15px var(--shadow-hover);
+}
+
+.theme-toggle:active {
+    transform: scale(0.95);
+}
+
 .auth-link {
     color: var(--text-primary);
     text-decoration: none;
@@ -609,6 +635,7 @@ h3 {
     flex: 1;
     height: 5px;
     -webkit-appearance: none;
+    appearance: none;
     background: var(--border-color);
     border-radius: 5px;
     outline: none;
@@ -1280,4 +1307,6 @@ textarea.form-control {
     margin-top: 30px;
     padding: 25px;
     background: var(--bg-secondary);
-    border-radius
+    border-radius: 20px;
+    border: 1px solid var(--border-color);
+}
