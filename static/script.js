@@ -574,7 +574,8 @@ async function startDownload() {
         return;
     }
     
-    showProgressModal('Downloading...');
+    // Show non-blocking progress notification
+    showDownloadProgress('Download started...');
     
     const formData = new FormData();
     formData.append('url', url);
@@ -583,18 +584,36 @@ async function startDownload() {
     
     try {
         const response = await fetch('/download-url', { method: 'POST', body: formData });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
         const data = await response.json();
         
-        if (response.ok) {
+        if (data.job_id) {
             currentDownloadJobId = data.job_id;
             startDownloadStatusCheck(data.job_id);
+            // Show success message
+            showDownloadProgress('Download in progress... You can continue using the app!');
         } else {
-            hideProgressModal();
-            alert('Error: ' + data.error);
+            hideDownloadProgress();
+            alert('Error: ' + (data.error || 'Unknown error occurred'));
         }
     } catch (error) {
-        hideProgressModal();
-        alert('Download failed: ' + error.message);
+        hideDownloadProgress();
+        console.error('Download failed:', error);
+        
+        // Handle specific error types
+        if (error.message.includes('Unexpected token')) {
+            alert('Session expired. Please refresh the page and login again.');
+        } else if (error.message.includes('401')) {
+            alert('Please login to download files.');
+        } else if (error.message.includes('403')) {
+            alert('You do not have permission to download files.');
+        } else {
+            alert('Download failed: ' + error.message);
+        }
     }
 }
 
@@ -722,25 +741,152 @@ function startDownloadStatusCheck(jobId) {
     statusInterval = setInterval(async () => {
         try {
             const response = await fetch(`/status/${jobId}`);
-            const data = await response.json();
             
-            updateProgress(data.progress, data.status);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const data = await response.json();
             
             if (data.status === 'completed') {
                 clearInterval(statusInterval);
-                hideProgressModal();
-                document.getElementById('downloadResult').classList.remove('hidden');
-                document.getElementById('downloadLink').href = `/download-file/${jobId}`;
+                hideDownloadProgress();
+                showDownloadComplete(jobId);
                 loadJobs();
             } else if (data.status === 'error') {
                 clearInterval(statusInterval);
-                hideProgressModal();
-                alert('Download error: ' + data.error);
+                hideDownloadProgress();
+                alert('Download error: ' + (data.error || 'Unknown error'));
+            } else {
+                // Update progress message
+                showDownloadProgress(`Downloading... ${data.progress || 0}%`);
             }
         } catch (error) {
             console.error('Status check failed:', error);
+            // If we get HTML instead of JSON, likely authentication issue
+            if (error.message.includes('Unexpected token')) {
+                clearInterval(statusInterval);
+                hideDownloadProgress();
+                alert('Session expired. Please refresh the page and login again.');
+                return;
+            }
         }
-    }, 1000);
+    }, 2000); // Check every 2 seconds instead of 1
+}
+
+// ========== NON-BLOCKING PROGRESS FUNCTIONS ==========
+function showDownloadProgress(message) {
+    // Create or update progress notification
+    let progressDiv = document.getElementById('downloadProgress');
+    if (!progressDiv) {
+        progressDiv = document.createElement('div');
+        progressDiv.id = 'downloadProgress';
+        progressDiv.className = 'download-progress';
+        document.body.appendChild(progressDiv);
+    }
+    progressDiv.innerHTML = `
+        <div class="progress-content">
+            <div class="progress-icon">📥</div>
+            <div class="progress-message">${message}</div>
+            <button class="progress-close" onclick="hideDownloadProgress()">×</button>
+        </div>
+    `;
+    progressDiv.classList.remove('hidden');
+}
+
+function hideDownloadProgress() {
+    const progressDiv = document.getElementById('downloadProgress');
+    if (progressDiv) {
+        progressDiv.classList.add('hidden');
+    }
+}
+
+function showDownloadComplete(jobId) {
+    // Show completion notification
+    const progressDiv = document.getElementById('downloadProgress');
+    if (progressDiv) {
+        progressDiv.innerHTML = `
+            <div class="progress-content completed">
+                <div class="progress-icon">✅</div>
+                <div class="progress-message">Download completed!</div>
+                <button class="download-btn" onclick="window.open('/download-file/${jobId}', '_blank')">
+                    📥 Download File
+                </button>
+                <button class="progress-close" onclick="hideDownloadProgress()">×</button>
+            </div>
+        `;
+        progressDiv.classList.remove('hidden');
+        
+        // Auto-hide after 10 seconds
+        setTimeout(() => {
+            hideDownloadProgress();
+        }, 10000);
+    }
+    
+    // Show download result in the downloader panel
+    showDownloadResult(jobId);
+}
+
+function showDownloadResult(jobId) {
+    const downloadResult = document.getElementById('downloadResult');
+    if (downloadResult) {
+        downloadResult.classList.remove('hidden');
+        
+        // Get file info
+        fetch(`/status/${jobId}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.filename) {
+                    document.getElementById('downloadFileName').textContent = data.filename;
+                }
+                if (data.file_size) {
+                    document.getElementById('downloadFileSize').textContent = formatFileSize(data.file_size);
+                }
+            })
+            .catch(error => {
+                console.error('Error getting file info:', error);
+                // Show error message to user
+                const fileName = document.getElementById('downloadFileName');
+                if (fileName) {
+                    fileName.textContent = 'Error loading file info';
+                }
+            });
+        
+        // Setup download button
+        const downloadBtn = document.getElementById('downloadToDeviceBtn');
+        if (downloadBtn) {
+            downloadBtn.onclick = () => {
+                window.location.href = `/download-file/${jobId}`;
+            };
+        }
+        
+        // Setup preview button
+        const previewBtn = document.getElementById('previewDownloadedBtn');
+        if (previewBtn) {
+            previewBtn.onclick = () => {
+                previewDownloadedFile(jobId);
+            };
+        }
+    }
+}
+
+function previewDownloadedFile(jobId) {
+    // Show video preview with downloaded file
+    const previewSection = document.getElementById('previewSection');
+    const videoPreview = document.getElementById('videoPreview');
+    
+    if (previewSection && videoPreview) {
+        videoPreview.src = `/preview-file/${jobId}`;
+        previewSection.classList.remove('hidden');
+        
+        // Scroll to preview
+        previewSection.scrollIntoView({ behavior: 'smooth' });
+    }
 }
 
 // ========== LOGIN STATUS ==========

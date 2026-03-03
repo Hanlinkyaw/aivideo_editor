@@ -224,52 +224,10 @@ def allowed_file(filename):
 
 # ==================== VIDEO EDITOR EFFECT FUNCTIONS ====================
 
-def zoom_effect_timed(clip, zoom_factor=1.5, zoom_type='in', interval=7, zoom_duration=2):
-    """Zoom In/Out Effect with timed intervals"""
-    def make_frame(gf, t):
-        cycle_time = t % interval
-        
-        if cycle_time < zoom_duration:
-            progress = cycle_time / zoom_duration
-            if zoom_type == 'in':
-                current_zoom = 1.0 + (zoom_factor - 1.0) * progress
-            else:
-                current_zoom = 1.0 + (zoom_factor - 1.0) * (1 - progress)
-        else:
-            current_zoom = 1.0
-        
-        frame = gf(t)
-        h, w = frame.shape[:2]
-        
-        if current_zoom > 1:
-            new_h, new_w = int(h / current_zoom), int(w / current_zoom)
-            y_start = (h - new_h) // 2
-            x_start = (w - new_w) // 2
-            cropped = frame[y_start:y_start+new_h, x_start:x_start+new_w]
-            pil_img = Image.fromarray(cropped)
-            zoomed = np.array(pil_img.resize((w, h), Image.Resampling.LANCZOS))
-            return zoomed
-        else:
-            return frame
-    
-    return clip.fl(make_frame)
-
-def freeze_effect_timed(clip, freeze_duration=1, interval=5):
-    """Freeze effect with timed intervals"""
-    def make_frame(gf, t):
-        segment = int(t // interval)
-        segment_end = (segment + 1) * interval
-        freeze_start = segment_end - freeze_duration
-        
-        if t >= freeze_start and t < segment_end:
-            return gf(freeze_start)
-        else:
-            return gf(t)
-    
-    return clip.fl(make_frame)
+# ==================== EFFECT FUNCTIONS ====================
 
 def zoom_effect(clip, zoom_factor=1.5, zoom_type='in'):
-    """Original Zoom Effect"""
+    """Original Zoom In/Out Effect"""
     def fl(im):
         h, w = im.shape[:2]
         if zoom_type == 'in':
@@ -291,8 +249,50 @@ def zoom_effect(clip, zoom_factor=1.5, zoom_type='in'):
             return zoomed
     return clip.fl_image(fl)
 
+def zoom_effect_timed(clip, zoom_factor=1.5, zoom_type='in', interval=8):
+    """New: Zoom In/Out Effect with timed intervals (every X seconds)"""
+    def make_frame(t):
+        # Calculate zoom based on time
+        cycle_time = t % interval
+        progress = cycle_time / interval
+        
+        if zoom_type == 'in':
+            # Zoom in gradually over the interval
+            current_zoom = 1.0 + (zoom_factor - 1.0) * progress
+        else:
+            # Zoom out gradually over the interval
+            current_zoom = zoom_factor - (zoom_factor - 1.0) * progress
+        
+        # Get frame at time t
+        frame = clip.get_frame(t)
+        h, w = frame.shape[:2]
+        
+        if current_zoom > 1:
+            # Zoom in
+            new_h, new_w = int(h / current_zoom), int(w / current_zoom)
+            y_start = (h - new_h) // 2
+            x_start = (w - new_w) // 2
+            cropped = frame[y_start:y_start+new_h, x_start:x_start+new_w]
+            pil_img = Image.fromarray(cropped)
+            zoomed = np.array(pil_img.resize((w, h), Image.Resampling.LANCZOS))
+            return zoomed
+        elif current_zoom < 1:
+            # Zoom out
+            new_h, new_w = int(h * current_zoom), int(w * current_zoom)
+            pil_img = Image.fromarray(frame)
+            shrunk = np.array(pil_img.resize((new_w, new_h), Image.Resampling.LANCZOS))
+            zoomed = np.zeros((h, w, 3), dtype=np.uint8)
+            y_start = (h - new_h) // 2
+            x_start = (w - new_w) // 2
+            zoomed[y_start:y_start+new_h, x_start:x_start+new_w] = shrunk
+            return zoomed
+        else:
+            return frame
+    
+    return clip.fl(make_frame)
+
 def freeze_effect(clip, freeze_duration=1):
-    """Original Freeze Effect"""
+    """Original Freeze Effect (freeze at the end)"""
     if clip.duration <= freeze_duration:
         return clip
     freeze_time = clip.duration - freeze_duration
@@ -300,6 +300,23 @@ def freeze_effect(clip, freeze_duration=1):
     freeze_frame = freeze_frame.set_duration(freeze_duration)
     main_part = clip.subclip(0, freeze_time)
     return CompositeVideoClip([main_part, freeze_frame.set_start(main_part.duration)])
+
+def freeze_effect_timed(clip, freeze_duration=1, interval=5):
+    """New: Freeze effect with timed intervals (every X seconds)"""
+    def make_frame(t):
+        # Calculate which segment we're in
+        segment = int(t // interval)
+        segment_start = segment * interval
+        segment_end = (segment + 1) * interval
+        
+        if t >= segment_end - freeze_duration:
+            # Freeze the frame from the start of the freeze period
+            freeze_time = segment_end - freeze_duration
+            return clip.get_frame(freeze_time)
+        else:
+            return clip.get_frame(t)
+    
+    return clip.fl(make_frame)
 
 def mirror_effect(clip, mirror_type='horizontal'):
     """Mirror effect"""
@@ -381,6 +398,7 @@ def text_effect(clip, text, font_path=None, font_size=40, color='white', positio
             except:
                 font = ImageFont.load_default()
             
+            # Calculate position
             if position == 'center':
                 x = w // 2
                 y = h // 2
@@ -397,8 +415,8 @@ def text_effect(clip, text, font_path=None, font_size=40, color='white', positio
             draw.text((x, y), text, fill=color, font=font, anchor='mm')
             return np.array(img)
         
-        txt_clip = ImageClip(make_text_frame(0), duration=clip.duration, ismask=False)
-        return CompositeVideoClip([clip, txt_clip.set_position(('center', 'center'))])
+        txt_clip = VideoClip(make_text_frame, duration=clip.duration)
+        return CompositeVideoClip([clip, txt_clip])
     except Exception as e:
         logger.error(f"Text effect error: {e}")
         return clip
@@ -467,12 +485,16 @@ def reduce_noise_effect(clip, strength=0.5):
     try:
         if clip.audio:
             audio = clip.audio
+            # Simple low-pass filter for noise reduction
             from scipy import signal
+            import numpy as np
             
             def reduce_noise(get_audio, t):
                 samples = get_audio(t)
                 if samples is None or len(samples) == 0:
                     return samples
+                
+                # Apply simple low-pass filter
                 b, a = signal.butter(4, 0.1, 'low')
                 filtered = signal.filtfilt(b, a, samples)
                 return filtered.astype(samples.dtype)
@@ -491,6 +513,8 @@ def get_output_parameters(quality):
         '4k': {'codec': 'libx264', 'bitrate': '20000k', 'preset': 'slow'}
     }
     return qualities.get(quality, qualities['1080p'])
+
+
 
 # ==================== VIDEO PROCESSING ====================
 
@@ -1045,12 +1069,15 @@ def get_status(job_id):
         
         if job['status'] == 'completed':
             response['output_url'] = f"/download/{job_id}"
+            # Add file size information
+            if 'output_path' in job and os.path.exists(job['output_path']):
+                response['file_size'] = os.path.getsize(job['output_path'])
         elif job['status'] == 'error':
             response['error'] = job.get('error', 'Unknown error')
         
         return jsonify(response)
     
-    return jsonify({'error': 'Job not found'}), 404
+    return jsonify({'error': 'Job not found or access denied'}), 404
 
 @app.route('/download/<job_id>')
 @login_required
@@ -1453,6 +1480,20 @@ def download_file_by_id(job_id):
                 job['output_path'],
                 as_attachment=True,
                 download_name=f"downloaded_{os.path.basename(job['output_path'])}"
+            )
+    return jsonify({'error': 'File not ready'}), 404
+
+@app.route('/preview-file/<job_id>')
+@login_required
+def preview_file(job_id):
+    """Preview downloaded file (streaming for video/audio)"""
+    if job_id in active_jobs and active_jobs[job_id]['user_id'] == current_user.id:
+        job = active_jobs[job_id]
+        if job['status'] == 'completed' and os.path.exists(job['output_path']):
+            return send_file(
+                job['output_path'],
+                as_attachment=False,
+                mimetype='video/mp4' if job['output_path'].endswith('.mp4') else 'audio/mpeg'
             )
     return jsonify({'error': 'File not ready'}), 404
 
