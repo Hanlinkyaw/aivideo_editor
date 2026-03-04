@@ -2,6 +2,8 @@
 
 AI နည်းပညာသုံး ဗီဒီယိုတည်းဖြတ်ရေး Platform ဖြစ်ပြီး ဗီဒီယိုအကျိုးသက်ရောက်မှုများ၊ မြန်မာစာတမ်းထုတ်ခြင်းနှင့် AI အသံပွားခြင်းတို့ ပါဝင်သည်။
 
+**CI/CD Test: ✅ Automated deployment working - $(date)**
+
 ![Version](https://img.shields.io/badge/version-1.0.0-blue)
 ![Python](https://img.shields.io/badge/python-3.11-green)
 ![License](https://img.shields.io/badge/license-MIT-orange)
@@ -65,8 +67,9 @@ bash
 cd ~/Desktop
 
 # Project အတွက် Folder အသစ်ဆောက်ခြင်း
-mkdir video_editor_project
-cd video_editor_project
+mkdir AI Video Editor
+
+# cd AI Video Editor
 2.2 GitHub မှ Project ကို Clone လုပ်ခြင်း
 bash
 # GitHub repository ကို Clone လုပ်ခြင်း
