@@ -13,6 +13,13 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       
+    - name: Debug secrets
+      run: |
+        echo "AWS_HOST is set: ${{ secrets.AWS_HOST != '' }}"
+        echo "AWS_USER is set: ${{ secrets.AWS_USER != '' }}"
+        echo "AWS_PORT is set: ${{ secrets.AWS_PORT != '' }}"
+        echo "AWS_SSH_KEY is set: ${{ secrets.AWS_SSH_KEY != '' }}"
+        
     - name: Deploy to AWS
       uses: appleboy/ssh-action@v1.0.0
       with:
@@ -20,6 +27,8 @@ jobs:
         username: ${{ secrets.AWS_USER }}
         key: ${{ secrets.AWS_SSH_KEY }}
         port: ${{ secrets.AWS_PORT }}
+        timeout: 120s
+        command_timeout: 60s
         script: |
           # Stop existing containers
           cd /home/ubuntu/aivideo_editor || mkdir -p /home/ubuntu/aivideo_editor
