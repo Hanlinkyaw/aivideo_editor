@@ -5,6 +5,12 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+env:
+  AWS_HOST: ${{ secrets.AWS_HOST }}
+  AWS_USER: ${{ secrets.AWS_USER }}
+  AWS_SSH_KEY: ${{ secrets.AWS_SSH_KEY }}
+  AWS_PORT: ${{ secrets.AWS_PORT }}
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -13,27 +19,20 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       
-    - name: Debug secrets
-      run: |
-        echo "AWS_HOST is set: ${{ secrets.AWS_HOST != '' }}"
-        echo "AWS_USER is set: ${{ secrets.AWS_USER != '' }}"
-        echo "AWS_PORT is set: ${{ secrets.AWS_PORT != '' }}"
-        echo "AWS_SSH_KEY is set: ${{ secrets.AWS_SSH_KEY != '' }}"
-        
     - name: Test SSH Connection
       run: |
         echo "Testing SSH connection to AWS..."
-        echo "Host: ${{ secrets.AWS_HOST }}"
-        echo "User: ${{ secrets.AWS_USER }}"
-        echo "Port: ${{ secrets.AWS_PORT }}"
+        echo "Host: ${{ env.AWS_HOST }}"
+        echo "User: ${{ env.AWS_USER }}"
+        echo "Port: ${{ env.AWS_PORT }}"
         
     - name: Deploy to AWS
       uses: appleboy/ssh-action@v1.0.0
       with:
-        host: ${{ secrets.AWS_HOST }}
-        username: ${{ secrets.AWS_USER }}
-        key: ${{ secrets.AWS_SSH_KEY }}
-        port: ${{ secrets.AWS_PORT }}
+        host: ${{ env.AWS_HOST }}
+        username: ${{ env.AWS_USER }}
+        key: ${{ env.AWS_SSH_KEY }}
+        port: ${{ env.AWS_PORT }}
         timeout: 120s
         command_timeout: 60s
         script: |
