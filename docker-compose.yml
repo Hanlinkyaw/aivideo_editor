@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  video-editor:
+    image: hanlinkyaw/video-editor:latest  # Replace with your Docker Hub username
+    container_name: video-editor-app
+    ports:
+      - "5555:5555"
+    volumes:
+      - uploads:/app/uploads
+      - outputs:/app/outputs
+      - audio:/app/audio
+      - transcripts:/app/transcripts
+      - previews:/app/previews
+      - ./users.db:/app/users.db
+    environment:
+      - PYTHONPATH=/app
+      - FLASK_APP=app.py
+      - FLASK_ENV=production
+      - SECRET_KEY=${SECRET_KEY}
+    restart: unless-stopped
+    networks:
+      - video-editor-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5555/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  nginx:
+    image: nginx:alpine
+    container_name: video-editor-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - uploads:/app/uploads:ro
+      - outputs:/app/outputs:ro
+    depends_on:
+      - video-editor
+    restart: unless-stopped
+    networks:
+      - video-editor-network
+
+networks:
+  video-editor-network:
+    driver: bridge
+
+volumes:
+  uploads:
+    driver: local
+  outputs:
+    driver: local
+  audio:
+    driver: local
+  transcripts:
+    driver: local
+  previews:
+    driver: local

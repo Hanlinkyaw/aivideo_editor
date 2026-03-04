@@ -1,0 +1,60 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+        
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: ${{ secrets.DOCKER_USERNAME }}/video-editor:latest
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        
+    - name: Deploy to AWS
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.AWS_HOST }}
+        username: ${{ secrets.AWS_USER }}
+        key: ${{ secrets.AWS_SSH_KEY }}
+        port: ${{ secrets.AWS_PORT }}
+        script: |
+          # Stop existing containers
+          cd /opt/video-editor || mkdir -p /opt/video-editor
+          docker-compose down || true
+          
+          # Pull latest image
+          docker pull ${{ secrets.DOCKER_USERNAME }}/video-editor:latest
+          
+          # Update docker-compose.yml with new image
+          sed -i 's|image: .*|image: ${{ secrets.DOCKER_USERNAME }}/video-editor:latest|' docker-compose.yml
+          
+          # Start services
+          docker-compose up -d
+          
+          # Clean up old images
+          docker image prune -f
+          
+          # Show status
+          docker-compose ps
+          docker logs video-editor-app --tail=20
