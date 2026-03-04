@@ -68,10 +68,10 @@ def load_user(user_id):
         return User(user[0], user[1], user[3])
     return None
 
-def generate_password_hash(password):
+def generate_password_hash_func(password):
     return generate_password_hash(password)
 
-def check_password_hash(password_hash, password):
+def check_password_hash_func(password_hash, password):
     return check_password_hash(password_hash, password)
 
 # Initialize database
@@ -103,6 +103,51 @@ def upload_file():
             'filename': filename
         })
 
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    """User registration"""
+    if request.method == 'POST':
+        username = request.form.get('username')
+        email = request.form.get('email')
+        password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+        
+        if not username or not email or not password:
+            return jsonify({'error': 'All fields required'}), 400
+        
+        if password != confirm_password:
+            return jsonify({'error': 'Passwords do not match'}), 400
+        
+        if len(password) < 6:
+            return jsonify({'error': 'Password must be at least 6 characters'}), 400
+        
+        conn = sqlite3.connect('/app/users.db')
+        c = conn.cursor()
+        
+        # Check if username already exists
+        c.execute("SELECT * FROM users WHERE username = ?", (username,))
+        if c.fetchone():
+            conn.close()
+            return jsonify({'error': 'Username already exists'}), 400
+        
+        # Check if email already exists
+        c.execute("SELECT * FROM users WHERE email = ?", (email,))
+        if c.fetchone():
+            conn.close()
+            return jsonify({'error': 'Email already exists'}), 400
+        
+        # Create new user
+        hashed_password = generate_password_hash_func(password)
+        c.execute("INSERT INTO users (username, password, email, created_at) VALUES (?, ?, ?, ?)",
+                 (username, hashed_password, email, datetime.now()))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({'message': 'Registration successful', 'redirect': '/login'})
+    
+    return render_template('register.html')
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     """User login"""
@@ -119,7 +164,7 @@ def login():
         user = c.fetchone()
         conn.close()
         
-        if user and check_password_hash(user[2], password):
+        if user and check_password_hash_func(user[2], password):
             user_obj = User(user[0], user[1], user[3])
             login_user(user_obj)
             return jsonify({'message': 'Login successful', 'redirect': '/'})
