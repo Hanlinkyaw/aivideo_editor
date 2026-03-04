@@ -21,11 +21,11 @@ jobs:
         echo "AWS_SSH_KEY is set: ${{ secrets.AWS_SSH_KEY != '' }}"
         
     - name: Deploy to AWS
-      uses: webfactory/ssh-action@master
+      uses: appleboy/ssh-action@v1.0.0
       with:
         host: ${{ secrets.AWS_HOST }}
         username: ${{ secrets.AWS_USER }}
-        ssh_private_key: ${{ secrets.AWS_SSH_KEY }}
+        key: ${{ secrets.AWS_SSH_KEY }}
         port: ${{ secrets.AWS_PORT }}
         timeout: 120s
         command_timeout: 60s
@@ -47,3 +47,5 @@ jobs:
           # Show status
           docker-compose ps
           docker logs video-editor-app --tail=20
+      env:
+        SSH_AUTH_SOCK: /tmp/ssh_auth.sock
