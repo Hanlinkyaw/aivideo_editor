@@ -1,8 +1,8 @@
-version: '3.8'
+version: "3.8"
 
 services:
   video-editor:
-    image: hanlinkyaw/video-editor:latest  # Replace with your Docker Hub username
+    build: .  # Build locally instead of pulling
     container_name: video-editor-app
     ports:
       - "5555:5555"
