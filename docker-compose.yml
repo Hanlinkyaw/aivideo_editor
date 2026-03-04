@@ -1,30 +1,21 @@
 services:
   video-editor:
-    build: .  # Build locally instead of pulling
+    build: .
     container_name: video-editor-app
+    command: ["python", "app_minimal.py"]
     ports:
       - "5555:5555"
     volumes:
       - uploads:/app/uploads
       - outputs:/app/outputs
-      - audio:/app/audio
-      - transcripts:/app/transcripts
-      - previews:/app/previews
-      - ./users.db:/app/users.db
     environment:
       - PYTHONPATH=/app
-      - FLASK_APP=app.py
+      - FLASK_APP=app_minimal.py
       - FLASK_ENV=production
       - SECRET_KEY=${SECRET_KEY}
     restart: unless-stopped
     networks:
       - video-editor-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5555/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
 
   nginx:
     image: nginx:alpine
