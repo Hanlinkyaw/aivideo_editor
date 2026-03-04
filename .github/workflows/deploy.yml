@@ -20,6 +20,13 @@ jobs:
         echo "AWS_PORT is set: ${{ secrets.AWS_PORT != '' }}"
         echo "AWS_SSH_KEY is set: ${{ secrets.AWS_SSH_KEY != '' }}"
         
+    - name: Test SSH Connection
+      run: |
+        echo "Testing SSH connection to AWS..."
+        echo "Host: ${{ secrets.AWS_HOST }}"
+        echo "User: ${{ secrets.AWS_USER }}"
+        echo "Port: ${{ secrets.AWS_PORT }}"
+        
     - name: Deploy to AWS
       uses: appleboy/ssh-action@v1.0.0
       with:
@@ -30,6 +37,10 @@ jobs:
         timeout: 120s
         command_timeout: 60s
         script: |
+          echo "Successfully connected to AWS!"
+          pwd
+          ls -la
+          
           # Stop existing containers
           cd /home/ubuntu/aivideo_editor || mkdir -p /home/ubuntu/aivideo_editor
           docker-compose down || true
@@ -47,5 +58,3 @@ jobs:
           # Show status
           docker-compose ps
           docker logs video-editor-app --tail=20
-      env:
-        SSH_AUTH_SOCK: /tmp/ssh_auth.sock
