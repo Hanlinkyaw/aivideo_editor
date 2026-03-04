@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   video-editor:
     build: .  # Build locally instead of pulling
