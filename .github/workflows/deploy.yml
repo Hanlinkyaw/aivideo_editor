@@ -22,9 +22,9 @@ jobs:
     - name: Test SSH Connection
       run: |
         echo "Testing SSH connection to AWS..."
-        echo "Host: ${{ env.HOST }}"
-        echo "User: ${{ env.USER }}"
-        echo "Port: ${{ env.PORT }}"
+        echo "Host: ${{ env.AWS_HOST }}"
+        echo "User: ${{ env.AWS_USER }}"
+        echo "Port: ${{ env.AWS_PORT }}"
         
     - name: Deploy to AWS
       uses: appleboy/ssh-action@v1.0.0
