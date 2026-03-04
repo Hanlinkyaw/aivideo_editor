@@ -21,11 +21,11 @@ jobs:
         echo "AWS_SSH_KEY is set: ${{ secrets.AWS_SSH_KEY != '' }}"
         
     - name: Deploy to AWS
-      uses: appleboy/ssh-action@v1.0.0
+      uses: webfactory/ssh-action@master
       with:
         host: ${{ secrets.AWS_HOST }}
         username: ${{ secrets.AWS_USER }}
-        key: ${{ secrets.AWS_SSH_KEY }}
+        ssh_private_key: ${{ secrets.AWS_SSH_KEY }}
         port: ${{ secrets.AWS_PORT }}
         timeout: 120s
         command_timeout: 60s
