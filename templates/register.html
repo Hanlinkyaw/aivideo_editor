@@ -199,6 +199,7 @@
         .dark-mode .auth-card h1 {
             background: linear-gradient(135deg, #00d2d3, #54a0ff);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
         }
         
@@ -230,6 +231,10 @@
                     <label>Password</label>
                     <input type="password" id="password" placeholder="Create a password" required>
                 </div>
+                <div class="form-group">
+                    <label>Confirm Password</label>
+                    <input type="password" id="confirm_password" placeholder="Confirm your password" required>
+                </div>
                 <button type="submit" class="auth-btn">Create Account</button>
             </form>
             <p class="auth-link">Already have an account? <a href="/login">Sign In</a></p>
@@ -246,11 +251,13 @@
             const username = document.getElementById('username').value;
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
+            const confirm_password = document.getElementById('confirm_password').value;
             
             const formData = new FormData();
             formData.append('username', username);
             formData.append('email', email);
             formData.append('password', password);
+            formData.append('confirm_password', confirm_password);
             
             try {
                 const response = await fetch('/register', {
