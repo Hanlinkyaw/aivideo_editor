@@ -6,10 +6,10 @@ on:
   workflow_dispatch:
 
 env:
-  AWS_HOST: ${{ secrets.AWS_HOST }}
-  AWS_USER: ${{ secrets.AWS_USER }}
-  AWS_SSH_KEY: ${{ secrets.AWS_SSH_KEY }}
-  AWS_PORT: ${{ secrets.AWS_PORT }}
+  HOST: ${{ secrets.AWS_HOST }}
+  USER: ${{ secrets.AWS_USER }}
+  SSH_KEY: ${{ secrets.AWS_SSH_KEY }}
+  PORT: ${{ secrets.AWS_PORT }}
 
 jobs:
   build-and-deploy:
@@ -22,17 +22,17 @@ jobs:
     - name: Test SSH Connection
       run: |
         echo "Testing SSH connection to AWS..."
-        echo "Host: ${{ env.AWS_HOST }}"
-        echo "User: ${{ env.AWS_USER }}"
-        echo "Port: ${{ env.AWS_PORT }}"
+        echo "Host: ${{ env.HOST }}"
+        echo "User: ${{ env.USER }}"
+        echo "Port: ${{ env.PORT }}"
         
     - name: Deploy to AWS
       uses: appleboy/ssh-action@v1.0.0
       with:
-        host: ${{ env.AWS_HOST }}
-        username: ${{ env.AWS_USER }}
-        key: ${{ env.AWS_SSH_KEY }}
-        port: ${{ env.AWS_PORT }}
+        host: ${{ env.HOST }}
+        username: ${{ env.USER }}
+        key: ${{ env.SSH_KEY }}
+        port: ${{ env.PORT }}
         timeout: 120s
         command_timeout: 60s
         script: |
