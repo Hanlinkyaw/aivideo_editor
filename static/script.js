@@ -909,23 +909,31 @@ async function checkLoginStatus() {
     try {
         const response = await fetch('/current_user');
         const data = await response.json();
-        const navUser = document.getElementById('navUser');
+        const authLinks = document.getElementById('authLinks');
         
-        if (!navUser) return;
+        if (!authLinks) return;
         
         if (data.authenticated) {
-            navUser.innerHTML = `
-                <span>👤 ${data.username}</span>
-                <button class="logout-btn" onclick="logout()">Logout</button>
+            authLinks.innerHTML = `
+                <span style="color: white; margin-right: 10px;">👤 ${data.username}</span>
+                <button class="nav-link logout-btn" onclick="logout()">Logout</button>
             `;
         } else {
-            navUser.innerHTML = `
-                <a href="/login" class="auth-link">Login</a>
-                <a href="/register" class="auth-link">Register</a>
+            authLinks.innerHTML = `
+                <a href="/login" class="nav-link">Login</a>
+                <a href="/register" class="nav-link">Register</a>
             `;
         }
     } catch (error) {
         console.error('Failed to check login status:', error);
+        // Fallback: show login/register links
+        const authLinks = document.getElementById('authLinks');
+        if (authLinks) {
+            authLinks.innerHTML = `
+                <a href="/login" class="nav-link">Login</a>
+                <a href="/register" class="nav-link">Register</a>
+            `;
+        }
     }
 }
 

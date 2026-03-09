@@ -180,6 +180,18 @@ def logout():
     logout_user()
     return jsonify({'message': 'Logged out successfully'})
 
+@app.route('/current_user')
+def get_current_user():
+    """Get current user info"""
+    if current_user.is_authenticated:
+        return jsonify({
+            'authenticated': True,
+            'username': current_user.username,
+            'email': current_user.email
+        })
+    else:
+        return jsonify({'authenticated': False})
+
 @app.route('/jobs')
 @login_required
 def jobs():
