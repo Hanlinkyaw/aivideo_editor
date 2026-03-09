@@ -2,15 +2,16 @@ services:
   video-editor:
     build: .
     container_name: video-editor-app
-    command: ["python", "app_minimal.py"]
+    command: ["python", "app.py"]
     ports:
       - "5555:5555"
     volumes:
       - uploads:/app/uploads
       - outputs:/app/outputs
+      - ./data:/app/data
     environment:
       - PYTHONPATH=/app
-      - FLASK_APP=app_minimal.py
+      - FLASK_APP=app.py
       - FLASK_ENV=production
       - SECRET_KEY=${SECRET_KEY}
     restart: unless-stopped

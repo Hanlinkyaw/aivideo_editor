@@ -124,40 +124,47 @@ login_manager.login_view = 'login'
 
 # Database setup
 def init_db():
-    conn = sqlite3.connect('/app/users.db')
+    # Ensure data directory exists
+    os.makedirs('/app/data', exist_ok=True)
+    conn = sqlite3.connect('/app/data/users.db')
     c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS users
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, 
-                  username TEXT UNIQUE, 
-                  password TEXT,
-                  email TEXT,
-                  created_at TIMESTAMP)''')
     
-    c.execute('''CREATE TABLE IF NOT EXISTS jobs
-                 (id TEXT PRIMARY KEY,
-                  user_id INTEGER,
-                  filename TEXT,
-                  type TEXT,
-                  status TEXT,
-                  created_at TIMESTAMP,
-                  output_path TEXT,
-                  FOREIGN KEY (user_id) REFERENCES users (id))''')
+    # Create users table if not exists
+    c.execute('''
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    ''')
     
-    c.execute('''CREATE TABLE IF NOT EXISTS transcripts
-                 (id TEXT PRIMARY KEY,
-                  user_id INTEGER,
-                  filename TEXT,
-                  content TEXT,
-                  language TEXT,
-                  created_at TIMESTAMP,
-                  FOREIGN KEY (user_id) REFERENCES users (id))''')
+    # Create transcripts table if not exists
+    c.execute('''
+    CREATE TABLE IF NOT EXISTS transcripts (
+        id TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        filename TEXT NOT NULL,
+        content TEXT NOT NULL,
+        language TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id)
+    )
+    ''')
     
-    c.execute('''CREATE TABLE IF NOT EXISTS voices
-                 (id TEXT PRIMARY KEY,
-                  user_id INTEGER,
-                  text TEXT,
-                  audio_path TEXT,
-                  language TEXT,
+    # Create jobs table if not exists
+    c.execute('''
+    CREATE TABLE IF NOT EXISTS jobs (
+        id TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        filename TEXT NOT NULL,
+        status TEXT NOT NULL,
+        progress INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id)
+    )
+    ''')
                   created_at TIMESTAMP,
                   FOREIGN KEY (user_id) REFERENCES users (id))''')
     conn.commit()
@@ -165,7 +172,7 @@ def init_db():
 
 # Database setup
 def init_db():
-    conn = sqlite3.connect('/app/users.db')
+    conn = sqlite3.connect('/app/data/users.db')
     c = conn.cursor()
     
     # Users table
@@ -228,7 +235,7 @@ class User(UserMixin):
 
 @login_manager.user_loader
 def load_user(user_id):
-    conn = sqlite3.connect('/app/users.db')
+    conn = sqlite3.connect('/app/data/users.db')
     c = conn.cursor()
     c.execute("SELECT * FROM users WHERE id = ?", (user_id,))
     user = c.fetchone()
@@ -881,7 +888,7 @@ def process_video_task(job_id, input_path, options, user_id):
         active_jobs[job_id]['output_file'] = output_filename
         active_jobs[job_id]['output_path'] = output_path
         
-        conn = sqlite3.connect('/app/users.db')
+        conn = sqlite3.connect('/app/data/users.db')
         c = conn.cursor()
         c.execute("INSERT INTO jobs (id, user_id, filename, type, status, created_at, output_path) VALUES (?, ?, ?, ?, ?, ?, ?)",
                  (job_id, user_id, os.path.basename(input_path), 'video', 'completed', datetime.now(), output_path))
@@ -934,17 +941,18 @@ def generate_voice():
         
         logger.info(f"Voice saved to: {audio_path}")
         
-        # Save to database
-        voice_id = str(uuid.uuid4())
-        conn = sqlite3.connect('/app/users.db')
+        # Save transcript to database
+        transcript_id = str(uuid.uuid4())
+        conn = sqlite3.connect('/app/data/users.db')
         c = conn.cursor()
-        c.execute("INSERT INTO voices (id, user_id, text, audio_path, language, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                 (voice_id, current_user.id, text[:100], audio_path, language, datetime.now()))
+        c.execute("INSERT INTO transcripts (id, user_id, filename, content, language, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                 (transcript_id, current_user.id, 'YouTube Transcript', text, 'my', datetime.now()))
         conn.commit()
         conn.close()
         
         return jsonify({
             'job_id': job_id,
+            'voice_id': str(uuid.uuid4()),
             'voice_id': voice_id,
             'audio_url': f"/audio/{os.path.basename(audio_path)}",
             'text': text[:100] + ('...' if len(text) > 100 else ''),
@@ -970,7 +978,7 @@ def get_audio(filename):
 @login_required
 def list_transcripts():
     """List user's transcripts"""
-    conn = sqlite3.connect('/app/users.db')
+    conn = sqlite3.connect('/app/data/users.db')
     c = conn.cursor()
     c.execute("SELECT id, filename, content, language, created_at FROM transcripts WHERE user_id = ? ORDER BY created_at DESC LIMIT 20",
               (current_user.id,))
@@ -989,7 +997,7 @@ def list_transcripts():
 @login_required
 def get_transcript(transcript_id):
     """Get full transcript"""
-    conn = sqlite3.connect('/app/users.db')
+    conn = sqlite3.connect('/app/data/users.db')
     c = conn.cursor()
     c.execute("SELECT content FROM transcripts WHERE id = ? AND user_id = ?",
               (transcript_id, current_user.id))
@@ -1006,7 +1014,7 @@ def get_transcript(transcript_id):
 @login_required
 def list_voices():
     """List user's generated voices"""
-    conn = sqlite3.connect('/app/users.db')
+    conn = sqlite3.connect('/app/data/users.db')
     c = conn.cursor()
     c.execute("SELECT id, text, language, created_at FROM voices WHERE user_id = ? ORDER BY created_at DESC LIMIT 20",
               (current_user.id,))
@@ -1280,7 +1288,7 @@ def register():
         hashed_password = generate_password_hash(password)
         
         try:
-            conn = sqlite3.connect('/app/users.db')
+            conn = sqlite3.connect('/app/data/users.db')
             c = conn.cursor()
             c.execute("INSERT INTO users (username, password, email, created_at) VALUES (?, ?, ?, ?)",
                      (username, hashed_password, email, datetime.now()))
@@ -1299,7 +1307,7 @@ def login():
         username = request.form.get('username')
         password = request.form.get('password')
         
-        conn = sqlite3.connect('/app/users.db')
+        conn = sqlite3.connect('/app/data/users.db')
         c = conn.cursor()
         c.execute("SELECT * FROM users WHERE username = ?", (username,))
         user = c.fetchone()
@@ -1398,12 +1406,10 @@ def clone_voice():
         
         # Save to database
         voice_id = str(uuid.uuid4())
-        conn = sqlite3.connect('/app/users.db')
+        conn = sqlite3.connect('/app/data/users.db')
         c = conn.cursor()
-        c.execute("""INSERT INTO voices 
-                     (id, user_id, text, audio_path, language, created_at) 
-                     VALUES (?, ?, ?, ?, ?, ?)""",
-                 (voice_id, current_user.id, text[:100], output_path, 'my-clone', datetime.now()))
+        c.execute("INSERT INTO voices (id, user_id, text, audio_path, language, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                 (voice_id, current_user.id, text[:100], output_path, 'my', datetime.now()))
         conn.commit()
         conn.close()
         
@@ -1583,7 +1589,7 @@ def run_download_task_v2(job_id, cmd, output_path, file_type, user_id, url):
                     raise Exception("Downloaded file not found")
             
             # Save to database
-            conn = sqlite3.connect('/app/users.db')
+            conn = sqlite3.connect('/app/data/users.db')
             c = conn.cursor()
             c.execute("""INSERT INTO jobs 
                        (id, user_id, filename, type, status, created_at, output_path) 
@@ -1909,7 +1915,7 @@ def voice_clone_panel():
             
             # Save to database
             voice_id = str(uuid.uuid4())
-            conn = sqlite3.connect('/app/users.db')
+            conn = sqlite3.connect('/app/data/users.db')
             c = conn.cursor()
             c.execute("""INSERT INTO voices 
                          (id, user_id, text, audio_path, language, created_at) 
