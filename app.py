@@ -1730,6 +1730,11 @@ def preview_upload():
 
 # ==================== TRANSCRIPT & VOICE GENERATION ROUTES ====================
 
+@app.route('/transcript-test')
+def test_transcript():
+    """Test transcript endpoint"""
+    return jsonify({"message": "Transcript route is working", "status": "ok"})
+
 @app.route('/transcript', methods=['POST'])
 @login_required
 def create_transcript():
