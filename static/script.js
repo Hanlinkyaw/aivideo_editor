@@ -385,39 +385,64 @@ function initTranscriptListeners() {
 }
 
 async function generateTranscript() {
-    const fileInput = document.getElementById('transcriptFileInput');
     const urlInput = document.getElementById('transcriptUrl');
     const language = document.getElementById('transcriptLanguage').value;
     
-    if (!fileInput.files[0] && !urlInput.value) {
-        alert('Please select a file or enter a URL');
+    if (!urlInput.value) {
+        alert('Please enter a YouTube URL');
         return;
     }
     
     showProgressModal('Generating Transcript...');
     
-    const formData = new FormData();
-    if (fileInput.files[0]) formData.append('file', fileInput.files[0]);
-    if (urlInput.value) formData.append('url', urlInput.value);
-    formData.append('language', language);
-    
     try {
-        const response = await fetch('/transcript', { method: 'POST', body: formData });
-        const data = await response.json();
+        const response = await fetch('/transcript', { 
+            method: 'POST', 
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                youtube_url: urlInput.value
+            })
+        });
         
         if (response.ok) {
+            const data = await response.json();
             hideProgressModal();
-            document.getElementById('transcriptResult').classList.remove('hidden');
-            document.getElementById('transcriptContent').textContent = data.transcript;
-            currentTranscriptId = data.transcript_id;
-            loadJobs();
+            
+            if (data.success) {
+                // Display transcript and Burmese story
+                displayTranscriptResults(data.transcript, data.burmese_story);
+            } else {
+                alert('Error: ' + (data.error || 'Unknown error'));
+            }
         } else {
-            hideProgressModal();
-            alert('Error: ' + data.error);
+            const errorData = await response.json();
+            alert('Error: ' + (errorData.error || 'Request failed'));
         }
     } catch (error) {
         hideProgressModal();
         alert('Transcript failed: ' + error.message);
+    }
+}
+
+function displayTranscriptResults(transcript, burmeseStory) {
+    // Display transcript
+    const transcriptArea = document.getElementById('transcriptResult');
+    if (transcriptArea) {
+        transcriptArea.value = transcript;
+    }
+    
+    // Display Burmese story
+    const storyArea = document.getElementById('burmeseStoryResult');
+    if (storyArea) {
+        storyArea.value = burmeseStory;
+    }
+    
+    // Show results section
+    const resultsSection = document.getElementById('transcriptResults');
+    if (resultsSection) {
+        resultsSection.style.display = 'block';
     }
 }
 

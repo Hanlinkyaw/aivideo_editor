@@ -540,16 +540,17 @@ async def transcribe_audio(audio_path):
         return None
 
 async def generate_burmese_story(transcript_text):
-    """Generate Burmese storytelling summary using Gemini"""
+    """Generate Burmese storytelling summary using Gemini 1.5 Pro"""
     try:
         if not GEMINI_AVAILABLE:
             return "တောင်းပန်ပါသည်။ Gemini AI မရှိပါ။"  # "Sorry. Gemini AI not available."
         
-        model = genai.GenerativeModel('gemini-pro')
+        model = genai.GenerativeModel('gemini-1.5-pro')
         
         prompt = f"""
         အောကားအသံကိုနားထောင်ပြီး အောကားဇာတ်လမ်းကို မြန်မာဘာသာဖြင့် ပြန်ပြောင်းပေးပါ။
         ဇာတ်လမ်းကို စိတ်ဝင်စားဖွယ်ရာ ဇာတ်အိမ်တစ်ခုလို ရေးပါ။
+        NotebookLM စတိုင်းဖြင့် ဇာတ်လမ်းပုံစံဖြင့် ရေးပေးပါ။
         
         မူရင်းအသံစာ:
         {transcript_text}
@@ -1810,7 +1811,7 @@ def preview_upload():
 @app.route('/transcript', methods=['POST'])
 @login_required
 def create_transcript():
-    """Create transcript and voice from YouTube URL"""
+    """Create transcript from YouTube URL using Gemini 1.5 Pro"""
     try:
         data = request.get_json()
         youtube_url = data.get('youtube_url')
@@ -1822,27 +1823,36 @@ def create_transcript():
         if not ('youtube.com' in youtube_url or 'youtu.be' in youtube_url):
             return jsonify({'error': 'Invalid YouTube URL'}), 400
         
-        # Generate job ID
-        job_id = str(uuid.uuid4())
+        # Download audio
+        logger.info(f"Downloading audio from: {youtube_url}")
+        audio_path = os.path.join(app.config['AUDIO_FOLDER'], f"temp_{current_user.id}.mp3")
         
-        # Start background processing
-        thread = threading.Thread(
-            target=process_transcript_and_voice,
-            args=(job_id, youtube_url, current_user.id)
-        )
-        thread.daemon = True
-        thread.start()
+        success = asyncio.run(download_youtube_audio(youtube_url, audio_path))
+        if not success:
+            return jsonify({'error': 'Failed to download audio'}), 500
         
-        # Track the thread
-        active_tasks[job_id] = {
-            'thread': thread,
-            'cancelled': False,
-            'type': 'transcript'
-        }
+        # Transcribe audio
+        logger.info("Transcribing audio...")
+        transcript = asyncio.run(transcribe_audio(audio_path))
         
+        if not transcript:
+            return jsonify({'error': 'Failed to transcribe audio'}), 500
+        
+        # Generate Burmese story using Gemini 1.5 Pro
+        logger.info("Generating Burmese story with Gemini...")
+        burmese_story = asyncio.run(generate_burmese_story(transcript))
+        
+        # Clean up temp audio file
+        try:
+            os.remove(audio_path)
+        except:
+            pass
+        
+        # Return transcript immediately
         return jsonify({
-            'message': 'Transcript generation started',
-            'job_id': job_id
+            'transcript': transcript,
+            'burmese_story': burmese_story,
+            'success': True
         })
         
     except Exception as e:
