@@ -33,27 +33,56 @@ jobs:
         username: ${{ env.AWS_USER }}
         key: ${{ env.AWS_SSH_KEY }}
         port: ${{ env.AWS_PORT }}
-        timeout: 120s
-        command_timeout: 60s
+        timeout: 600s
+        command_timeout: 600s
         script: |
           echo "Successfully connected to AWS!"
           pwd
           ls -la
           
-          # Stop existing containers
+          # Navigate to project directory
           cd /home/ubuntu/aivideo_editor || mkdir -p /home/ubuntu/aivideo_editor
+          
+          # Stop existing containers
           docker-compose down || true
+          
+          # Remove old images to force rebuild
+          docker-compose down --rmi all || true
+          docker system prune -f || true
           
           # Pull latest code
           git pull origin main
           
-          # Build and start services
-          docker-compose build
+          # Build with extended timeout and no cache
+          echo "Building with extended timeout..."
+          timeout 600 docker-compose build --no-cache || {
+            echo "Build failed, trying without no-cache..."
+            timeout 600 docker-compose build || {
+              echo "Build still failed, trying basic build..."
+              timeout 600 docker-compose build --pull
+            }
+          }
+          
+          # Start services
+          echo "Starting services..."
           docker-compose up -d
           
-          # Clean up old images
-          docker image prune -f
+          # Wait for containers to start
+          echo "Waiting for containers to start..."
+          sleep 60
           
           # Show status
+          echo "Container status:"
           docker-compose ps
+          
+          echo "Application logs:"
           docker logs video-editor-app --tail=20
+          
+          # Check if container is running
+          if docker ps | grep -q "video-editor-app"; then
+            echo " Container is running successfully!"
+          else
+            echo " Container failed to start"
+            docker logs video-editor-app --tail=50
+            exit 1
+          fi
