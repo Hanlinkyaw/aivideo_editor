@@ -79,7 +79,19 @@ init_db()
 
 @app.route('/')
 def index():
-    """Main video editor page"""
+    """Redirect to login page"""
+    return render_template('login.html')
+
+@app.route('/app')
+@login_required
+def main_app():
+    """Main video editor page (for logged-in users)"""
+    return render_template('index.html')
+
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    """User dashboard"""
     return render_template('index.html')
 
 @app.route('/upload', methods=['POST'])
@@ -167,7 +179,7 @@ def login():
         if user and check_password_hash_func(user[2], password):
             user_obj = User(user[0], user[1], user[3])
             login_user(user_obj)
-            return jsonify({'message': 'Login successful', 'redirect': '/'})
+            return jsonify({'message': 'Login successful', 'redirect': '/app'})
         
         return jsonify({'error': 'Invalid credentials'}), 401
     
