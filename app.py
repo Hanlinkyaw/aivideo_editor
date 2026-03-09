@@ -1157,11 +1157,17 @@ def list_jobs():
         logger.error(f"Error in list_jobs: {str(e)}")
         return jsonify([])  # Return empty array on error
 
+@app.route('/jobs/simple')
+@login_required
+def simple_jobs():
+    """Simple jobs endpoint - return empty list to avoid 404"""
+    return jsonify([])
+
 
 @app.route('/')
 def index():
-    """Main page"""
-    return render_template('index.html', user=current_user if current_user.is_authenticated else None)
+    """Root route - redirect to login page"""
+    return redirect('/login')
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
