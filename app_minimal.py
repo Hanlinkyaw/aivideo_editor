@@ -180,6 +180,35 @@ def logout():
     logout_user()
     return jsonify({'message': 'Logged out successfully'})
 
+@app.route('/jobs')
+@login_required
+def jobs():
+    """Get user's video processing jobs"""
+    conn = sqlite3.connect('/app/users.db')
+    c = conn.cursor()
+    
+    # Get current user's jobs
+    c.execute("""
+        SELECT id, filename, type, status, created_at, output_path 
+        FROM jobs 
+        WHERE user_id = ? 
+        ORDER BY created_at DESC
+    """, (current_user.id,))
+    
+    jobs_list = []
+    for row in c.fetchall():
+        jobs_list.append({
+            'id': row[0],
+            'filename': row[1],
+            'type': row[2],
+            'status': row[3],
+            'created_at': row[4],
+            'output_path': row[5]
+        })
+    
+    conn.close()
+    return jsonify({'jobs': jobs_list})
+
 @app.route('/status')
 def status():
     """Health check endpoint"""
