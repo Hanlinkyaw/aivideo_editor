@@ -548,14 +548,22 @@ async def generate_burmese_story(transcript_text):
         model = genai.GenerativeModel('gemini-1.5-pro')
         
         prompt = f"""
-        အောကားအသံကိုနားထောင်ပြီး အောကားဇာတ်လမ်းကို မြန်မာဘာသာဖြင့် ပြန်ပြောင်းပေးပါ။
-        ဇာတ်လမ်းကို စိတ်ဝင်စားဖွယ်ရာ ဇာတ်အိမ်တစ်ခုလို ရေးပါ။
-        NotebookLM စတိုင်းဖြင့် ဇာတ်လမ်းပုံစံဖြင့် ရေးပေးပါ။
+        You are NotebookLM, an AI assistant specialized in creating engaging, educational content from transcripts. 
         
-        မူရင်းအသံစာ:
+        Please analyze this transcript and create a compelling Burmese story that:
+        1. Captures the main themes and key insights
+        2. Uses natural, conversational Myanmar language
+        3. Includes cultural context where appropriate
+        4. Is engaging and easy to understand
+        5. Follows storytelling traditions of Myanmar
+        
+        Format as a narrative story that flows naturally, not just a summary.
+        Use rich vocabulary but keep it accessible.
+        
+        Original transcript:
         {transcript_text}
         
-        မြန်မာဘာသာဇာတ်လမ်း:
+        Burmese story (NotebookLM style):
         """
         
         response = model.generate_content(prompt)
