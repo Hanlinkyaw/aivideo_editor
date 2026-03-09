@@ -1727,37 +1727,50 @@ def preview_upload():
 @app.route('/transcript', methods=['POST'])
 @login_required
 def create_transcript():
-    """Create transcript from YouTube URL using Gemini 1.5 Pro"""
+    """Transcript Generator input Youtube url generate stranscript to Myanmar Language"""
     try:
+        logger.info(f"=== TRANSCRIPT ROUTE CALLED ===")
+        logger.info(f"Request method: {request.method}")
+        logger.info(f"Request headers: {dict(request.headers)}")
+        
         data = request.get_json()
+        logger.info(f"Request data: {data}")
+        
         youtube_url = data.get('url')
+        logger.info(f"YouTube URL extracted: {youtube_url}")
         
         if not youtube_url:
+            logger.error("No YouTube URL provided")
             return jsonify({'error': 'YouTube URL is required'}), 400
         
         # Validate YouTube URL
         if not ('youtube.com' in youtube_url or 'youtu.be' in youtube_url):
+            logger.error(f"Invalid YouTube URL: {youtube_url}")
             return jsonify({'error': 'Invalid YouTube URL'}), 400
         
-        # Download audio
-        logger.info(f"Downloading audio from: {youtube_url}")
-        audio_path = os.path.join(app.config['AUDIO_FOLDER'], f"temp_{current_user.id}.mp3")
+        logger.info(f"Transcript generation from YouTube URL: {youtube_url}")
         
+        # Download audio
+        audio_path = os.path.join(app.config['AUDIO_FOLDER'], f"temp_{current_user.id}.mp3")
         success = asyncio.run(download_youtube_audio(youtube_url, audio_path))
+        
         if not success:
+            logger.error("Failed to download audio")
             return jsonify({'error': 'Failed to download audio'}), 500
         
         # Transcribe audio
-        logger.info("Transcribing audio...")
+        logger.info("Transcribing audio to Myanmar...")
         transcript = asyncio.run(transcribe_audio(audio_path))
         
         if not transcript:
+            logger.error("Failed to transcribe audio")
             return jsonify({'error': 'Failed to transcribe audio'}), 500
         
-        # Generate Burmese story using Gemini 1.5 Pro
-        logger.info("Generating Burmese story with Gemini...")
+        # Generate Myanmar story using Gemini 1.5 Pro
+        logger.info("Generating Myanmar story with Gemini...")
         
         if not GEMINI_AVAILABLE:
+            logger.error("Gemini AI not available")
             return jsonify({'error': 'Gemini AI not available'}), 500
         
         model = genai.GenerativeModel('gemini-1.5-pro')
@@ -1766,17 +1779,22 @@ def create_transcript():
         response = model.generate_content(prompt)
         generated_text = response.text
         
+        logger.info(f"Generated text length: {len(generated_text)}")
+        
         # Clean up temp audio file
         try:
             os.remove(audio_path)
         except:
             pass
         
-        # Return transcript immediately
-        return jsonify({"transcript": generated_text})
+        # Return Myanmar transcript immediately
+        result = {"transcript": generated_text}
+        logger.info(f"Returning result: {result}")
+        return jsonify(result)
         
     except Exception as e:
-        logger.error(f"Transcript creation error: {str(e)}")
+        logger.error(f"Transcript generation error: {str(e)}")
+        logger.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
 @app.route('/transcript/<job_id>/status')
