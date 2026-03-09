@@ -79,7 +79,7 @@ init_db()
 
 @app.route('/')
 def index():
-    """Redirect to login page"""
+    """Root route - redirect to login page"""
     return render_template('login.html')
 
 @app.route('/app')
@@ -232,6 +232,11 @@ def jobs():
     
     conn.close()
     return jsonify({'jobs': jobs_list})
+
+@app.route('/health')
+def health():
+    """Health check endpoint"""
+    return jsonify({'status': 'healthy', 'port': 5555})
 
 @app.route('/status')
 def status():
