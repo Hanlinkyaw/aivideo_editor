@@ -18,6 +18,7 @@ import tempfile
 import subprocess
 import re
 import signal
+import asyncio
 from urllib.parse import urlparse
 from datetime import datetime
 from functools import wraps
@@ -27,6 +28,14 @@ from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 import numpy as np
+import yt_dlp
+import edge_tts
+try:
+    import google.generativeai as genai
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
+    print("Warning: google-generativeai not available")
 
 # Global task tracking
 active_tasks = {}
@@ -89,14 +98,23 @@ app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__fil
 app.config['OUTPUT_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'outputs')
 app.config['AUDIO_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'audio')
 app.config['TRANSCRIPT_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'transcripts')
+app.config['VOICE_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'voices')
 app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024 * 1024  # 1GB max
 app.config['ALLOWED_EXTENSIONS'] = {'mp4', 'avi', 'mov', 'mkv', 'flv', 'wmv', 'mp3', 'wav', 'm4a'}
 app.config['SECRET_KEY'] = 'video-editor-secret-key-change-this-in-production'
 
-# Create folders if not exist
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-os.makedirs(app.config['OUTPUT_FOLDER'], exist_ok=True)
-os.makedirs(app.config['AUDIO_FOLDER'], exist_ok=True)
+# Create necessary directories
+for folder in [app.config['UPLOAD_FOLDER'], app.config['OUTPUT_FOLDER'], 
+              app.config['AUDIO_FOLDER'], app.config['TRANSCRIPT_FOLDER'], 
+              app.config['VOICE_FOLDER']]:
+    os.makedirs(folder, exist_ok=True)
+
+# Initialize Gemini if available
+if GEMINI_AVAILABLE and os.environ.get('GOOGLE_API_KEY'):
+    genai.configure(api_key=os.environ.get('GOOGLE_API_KEY'))
+    logger.info("✅ Gemini AI initialized")
+else:
+    logger.warning("⚠️ Gemini AI not available - please set GOOGLE_API_KEY")
 os.makedirs(app.config['TRANSCRIPT_FOLDER'], exist_ok=True)
 
 # Login Manager Setup
@@ -479,15 +497,178 @@ def reduce_noise_effect(clip, strength=0.5):
     return clip
 
 def get_output_parameters(quality):
-    """Get video parameters based on quality"""
-    qualities = {
-        '720p': {'codec': 'libx264', 'bitrate': '2000k', 'preset': 'medium'},
-        '1080p': {'codec': 'libx264', 'bitrate': '5000k', 'preset': 'medium'},
-        '4k': {'codec': 'libx264', 'bitrate': '20000k', 'preset': 'slow'}
-    }
-    return qualities.get(quality, qualities['1080p'])
+    """Get output parameters based on quality setting"""
+    if quality == 'high':
+        return {'bitrate': '5000k', 'codec': 'libx264', 'preset': 'slow'}
+    elif quality == 'medium':
+        return {'bitrate': '2500k', 'codec': 'libx264', 'preset': 'medium'}
+    else:  # low
+        return {'bitrate': '1000k', 'codec': 'libx264', 'preset': 'fast'}
 
+# ==================== TRANSCRIPT & VOICE GENERATION FUNCTIONS ====================
 
+async def download_youtube_audio(url, output_path):
+    """Download audio from YouTube URL"""
+    try:
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'outtmpl': output_path,
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192',
+            }],
+        }
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
+        
+        return True
+    except Exception as e:
+        logger.error(f"YouTube download error: {e}")
+        return False
+
+async def transcribe_audio(audio_path):
+    """Transcribe audio using Whisper"""
+    try:
+        import whisper
+        model = whisper.load_model("base")
+        result = model.transcribe(audio_path)
+        return result['text']
+    except Exception as e:
+        logger.error(f"Transcription error: {e}")
+        return None
+
+async def generate_burmese_story(transcript_text):
+    """Generate Burmese storytelling summary using Gemini"""
+    try:
+        if not GEMINI_AVAILABLE:
+            return "တောင်းပန်ပါသည်။ Gemini AI မရှိပါ။"  # "Sorry. Gemini AI not available."
+        
+        model = genai.GenerativeModel('gemini-pro')
+        
+        prompt = f"""
+        အောကားအသံကိုနားထောင်ပြီး အောကားဇာတ်လမ်းကို မြန်မာဘာသာဖြင့် ပြန်ပြောင်းပေးပါ။
+        ဇာတ်လမ်းကို စိတ်ဝင်စားဖွယ်ရာ ဇာတ်အိမ်တစ်ခုလို ရေးပါ။
+        
+        မူရင်းအသံစာ:
+        {transcript_text}
+        
+        မြန်မာဘာသာဇာတ်လမ်း:
+        """
+        
+        response = model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        logger.error(f"Gemini story generation error: {e}")
+        return "တောင်းပန်ပါသည်။ ဇာတ်လမ်းဖန်တီးရာတွင် အမှားဖြစ်ပါသည်။"  # "Sorry. Error generating story."
+
+async def generate_burmese_voice(text, output_path):
+    """Generate Burmese voice using Edge-TTS"""
+    try:
+        communicate = edge_tts.Communicate(text, "my-MM-ThihaNeural")
+        await communicate.save(output_path)
+        return True
+    except Exception as e:
+        logger.error(f"Voice generation error: {e}")
+        return False
+
+# ==================== BACKGROUND TASK FOR TRANSCRIPT & VOICE ====================
+
+def process_transcript_and_voice(job_id, youtube_url, user_id):
+    """Background task to process YouTube transcript and generate voice"""
+    try:
+        import asyncio
+        
+        async def run_full_process():
+            # Initialize job
+            active_jobs[job_id] = {
+                'id': job_id,
+                'user_id': user_id,
+                'filename': f"Transcript from {youtube_url[:30]}...",
+                'status': 'processing',
+                'progress': 0,
+                'created_at': time.time()
+            }
+            
+            # Step 1: Download audio (30%)
+            active_jobs[job_id]['progress'] = 10
+            logger.info(f"Step 1: Downloading audio from YouTube")
+            
+            audio_path = os.path.join(app.config['AUDIO_FOLDER'], f"{job_id}.mp3")
+            success = await download_youtube_audio(youtube_url, audio_path)
+            
+            if not success:
+                active_jobs[job_id]['status'] = 'error'
+                active_jobs[job_id]['error'] = 'Failed to download audio'
+                return
+            
+            # Step 2: Transcribe audio (60%)
+            active_jobs[job_id]['progress'] = 40
+            logger.info(f"Step 2: Transcribing audio")
+            
+            transcript = await transcribe_audio(audio_path)
+            if not transcript:
+                active_jobs[job_id]['status'] = 'error'
+                active_jobs[job_id]['error'] = 'Failed to transcribe audio'
+                return
+            
+            # Save transcript
+            transcript_path = os.path.join(app.config['TRANSCRIPT_FOLDER'], f"{job_id}.txt")
+            with open(transcript_path, 'w', encoding='utf-8') as f:
+                f.write(transcript)
+            
+            # Step 3: Generate Burmese story (80%)
+            active_jobs[job_id]['progress'] = 70
+            logger.info(f"Step 3: Generating Burmese story")
+            
+            burmese_story = await generate_burmese_story(transcript)
+            
+            # Save story
+            story_path = os.path.join(app.config['TRANSCRIPT_FOLDER'], f"{job_id}_story.txt")
+            with open(story_path, 'w', encoding='utf-8') as f:
+                f.write(burmese_story)
+            
+            # Step 4: Generate voice (100%)
+            active_jobs[job_id]['progress'] = 90
+            logger.info(f"Step 4: Generating Burmese voice")
+            
+            voice_path = os.path.join(app.config['VOICE_FOLDER'], f"{job_id}.mp3")
+            success = await generate_burmese_voice(burmese_story, voice_path)
+            
+            if not success:
+                active_jobs[job_id]['status'] = 'error'
+                active_jobs[job_id]['error'] = 'Failed to generate voice'
+                return
+            
+            # Complete
+            active_jobs[job_id]['status'] = 'completed'
+            active_jobs[job_id]['progress'] = 100
+            active_jobs[job_id]['transcript_path'] = transcript_path
+            active_jobs[job_id]['story_path'] = story_path
+            active_jobs[job_id]['voice_path'] = voice_path
+            active_jobs[job_id]['transcript'] = transcript
+            active_jobs[job_id]['story'] = burmese_story
+            
+            logger.info(f"✅ Transcript and voice generation completed for job {job_id}")
+        
+        # Run the async process
+        asyncio.run(run_full_process())
+        
+    except Exception as e:
+        logger.error(f"Transcript/Voice processing error: {e}")
+        if job_id in active_jobs:
+            active_jobs[job_id]['status'] = 'error'
+            active_jobs[job_id]['error'] = str(e)
+
+def get_output_parameters(quality):
+    """Get output parameters based on quality setting"""
+    if quality == 'high':
+        return {'bitrate': '5000k', 'codec': 'libx264', 'preset': 'slow'}
+    elif quality == 'medium':
+        return {'bitrate': '2500k', 'codec': 'libx264', 'preset': 'medium'}
+    else:  # low
+        return {'bitrate': '1000k', 'codec': 'libx264', 'preset': 'fast'}
 
 # ==================== VIDEO PROCESSING ====================
 
@@ -1587,18 +1768,20 @@ def get_preview(job_id):
 def preview_upload():
     """Upload video for preview only (no processing)"""
     try:
-        if 'video' not in request.files:
-            return jsonify({'error': 'No file uploaded'}), 400
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file part'}), 400
         
-        file = request.files['video']
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'No selected file'}), 400
+        
         if not allowed_file(file.filename):
-            return jsonify({'error': 'Invalid file type'}), 400
+            return jsonify({'error': 'File type not allowed'}), 400
         
         # Generate preview ID
         preview_id = str(uuid.uuid4())
         filename = secure_filename(file.filename)
         
-        # Save file temporarily
         temp_path = os.path.join(app.config['UPLOAD_FOLDER'], f"preview_{preview_id}_{filename}")
         file.save(temp_path)
         
@@ -1607,20 +1790,134 @@ def preview_upload():
             'id': preview_id,
             'user_id': current_user.id,
             'filename': filename,
-            'input_path': temp_path,
             'status': 'preview',
+            'input_path': temp_path,
             'created_at': time.time()
         }
         
         return jsonify({
+            'message': 'Preview uploaded successfully',
             'preview_id': preview_id,
-            'message': 'Preview ready',
             'filename': filename
         })
         
     except Exception as e:
         logger.error(f"Preview upload error: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+# ==================== TRANSCRIPT & VOICE GENERATION ROUTES ====================
+
+@app.route('/transcript', methods=['POST'])
+@login_required
+def create_transcript():
+    """Create transcript and voice from YouTube URL"""
+    try:
+        data = request.get_json()
+        youtube_url = data.get('youtube_url')
+        
+        if not youtube_url:
+            return jsonify({'error': 'YouTube URL is required'}), 400
+        
+        # Validate YouTube URL
+        if not ('youtube.com' in youtube_url or 'youtu.be' in youtube_url):
+            return jsonify({'error': 'Invalid YouTube URL'}), 400
+        
+        # Generate job ID
+        job_id = str(uuid.uuid4())
+        
+        # Start background processing
+        thread = threading.Thread(
+            target=process_transcript_and_voice,
+            args=(job_id, youtube_url, current_user.id)
+        )
+        thread.daemon = True
+        thread.start()
+        
+        # Track the thread
+        active_tasks[job_id] = {
+            'thread': thread,
+            'cancelled': False,
+            'type': 'transcript'
+        }
+        
+        return jsonify({
+            'message': 'Transcript generation started',
+            'job_id': job_id
+        })
+        
+    except Exception as e:
+        logger.error(f"Transcript creation error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/transcript/<job_id>/status')
+@login_required
+def get_transcript_status(job_id):
+    """Get transcript job status"""
+    if job_id in active_jobs and active_jobs[job_id]['user_id'] == current_user.id:
+        job = active_jobs[job_id]
+        return jsonify({
+            'status': job['status'],
+            'progress': job.get('progress', 0),
+            'error': job.get('error'),
+            'transcript': job.get('transcript'),
+            'story': job.get('story'),
+            'voice_available': job.get('status') == 'completed'
+        })
+    else:
+        return jsonify({'error': 'Job not found'}), 404
+
+@app.route('/transcript/<job_id>/voice')
+@login_required
+def get_transcript_voice(job_id):
+    """Download generated voice file"""
+    if job_id in active_jobs and active_jobs[job_id]['user_id'] == current_user.id:
+        job = active_jobs[job_id]
+        if job['status'] == 'completed' and 'voice_path' in job:
+            return send_file(
+                job['voice_path'],
+                as_attachment=True,
+                download_name=f"transcript_voice_{job_id}.mp3",
+                mimetype='audio/mpeg'
+            )
+        else:
+            return jsonify({'error': 'Voice not ready'}), 404
+    else:
+        return jsonify({'error': 'Job not found'}), 404
+
+@app.route('/transcript/<job_id>/download')
+@login_required
+def download_transcript_files(job_id):
+    """Download transcript and story files as ZIP"""
+    if job_id in active_jobs and active_jobs[job_id]['user_id'] == current_user.id:
+        job = active_jobs[job_id]
+        if job['status'] == 'completed':
+            import zipfile
+            import io
+            
+            # Create ZIP in memory
+            zip_buffer = io.BytesIO()
+            
+            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                if 'transcript_path' in job and os.path.exists(job['transcript_path']):
+                    zip_file.write(job['transcript_path'], 'transcript.txt')
+                
+                if 'story_path' in job and os.path.exists(job['story_path']):
+                    zip_file.write(job['story_path'], 'burmese_story.txt')
+                
+                if 'voice_path' in job and os.path.exists(job['voice_path']):
+                    zip_file.write(job['voice_path'], 'burmese_voice.mp3')
+            
+            zip_buffer.seek(0)
+            return send_file(
+                zip_buffer,
+                as_attachment=True,
+                download_name=f"transcript_package_{job_id}.zip",
+                mimetype='application/zip'
+            )
+        else:
+            return jsonify({'error': 'Files not ready'}), 404
+    else:
+        return jsonify({'error': 'Job not found'}), 404
 
 # ==================== VOICE CLONE PANEL ====================
 
