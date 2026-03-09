@@ -1822,7 +1822,7 @@ def create_transcript():
     """Create transcript from YouTube URL using Gemini 1.5 Pro"""
     try:
         data = request.get_json()
-        youtube_url = data.get('youtube_url')
+        youtube_url = data.get('url')
         
         if not youtube_url:
             return jsonify({'error': 'YouTube URL is required'}), 400
@@ -1848,7 +1848,15 @@ def create_transcript():
         
         # Generate Burmese story using Gemini 1.5 Pro
         logger.info("Generating Burmese story with Gemini...")
-        burmese_story = asyncio.run(generate_burmese_story(transcript))
+        
+        if not GEMINI_AVAILABLE:
+            return jsonify({'error': 'Gemini AI not available'}), 500
+        
+        model = genai.GenerativeModel('gemini-1.5-pro')
+        prompt = f"Explain this video in Burmese as a storyteller (NotebookLM style). Use natural, warm, and friendly spoken Burmese.\n\nOriginal transcript:\n{transcript}"
+        
+        response = model.generate_content(prompt)
+        generated_text = response.text
         
         # Clean up temp audio file
         try:
@@ -1857,11 +1865,7 @@ def create_transcript():
             pass
         
         # Return transcript immediately
-        return jsonify({
-            'transcript': transcript,
-            'burmese_story': burmese_story,
-            'success': True
-        })
+        return jsonify({"transcript": generated_text})
         
     except Exception as e:
         logger.error(f"Transcript creation error: {str(e)}")

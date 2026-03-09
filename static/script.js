@@ -386,7 +386,6 @@ function initTranscriptListeners() {
 
 async function generateTranscript() {
     const urlInput = document.getElementById('transcriptUrl');
-    const language = document.getElementById('transcriptLanguage').value;
     
     if (!urlInput.value) {
         alert('Please enter a YouTube URL');
@@ -402,7 +401,7 @@ async function generateTranscript() {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                youtube_url: urlInput.value
+                url: urlInput.value
             })
         });
         
@@ -410,33 +409,23 @@ async function generateTranscript() {
             const data = await response.json();
             hideProgressModal();
             
-            if (data.success) {
-                // Display transcript and Burmese story
-                displayTranscriptResults(data.transcript, data.burmese_story);
-            } else {
-                alert('Error: ' + (data.error || 'Unknown error'));
-            }
+            // Display transcript result
+            displayTranscriptResults(data.transcript);
         } else {
             const errorData = await response.json();
             alert('Error: ' + (errorData.error || 'Request failed'));
         }
     } catch (error) {
         hideProgressModal();
-        alert('Transcript failed: ' + error.message);
+        alert('Transcript generation failed: ' + error.message);
     }
 }
 
-function displayTranscriptResults(transcript, burmeseStory) {
+function displayTranscriptResults(transcript) {
     // Display transcript
     const transcriptArea = document.getElementById('transcriptResult');
     if (transcriptArea) {
         transcriptArea.value = transcript;
-    }
-    
-    // Display Burmese story
-    const storyArea = document.getElementById('burmeseStoryResult');
-    if (storyArea) {
-        storyArea.value = burmeseStory;
     }
     
     // Show results section
