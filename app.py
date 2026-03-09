@@ -1100,6 +1100,43 @@ def upload_file():
         
         # Validate video file
         if not validate_video_file(file_path):
+            return jsonify({'error': 'Invalid video file'}), 400
+        
+        # Initialize job
+        active_jobs[job_id] = {
+            'id': job_id,
+            'user_id': current_user.id,
+            'filename': filename,
+            'input_path': file_path,
+            'status': 'processing',
+            'progress': 0,
+            'created_at': time.time()
+        }
+        
+        # Start processing in background
+        thread = threading.Thread(
+            target=process_video_task,
+            args=(job_id, file_path, {}, current_user.id)
+        )
+        thread.daemon = True
+        thread.start()
+        
+        # Track the thread
+        active_tasks[job_id] = {
+            'thread': thread,
+            'cancelled': False,
+            'type': 'video'
+        }
+        
+        return jsonify({
+            'message': 'Upload successful',
+            'job_id': job_id,
+            'filename': filename
+        })
+        
+    except Exception as e:
+        logger.error(f"Upload error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
             os.remove(file_path)  # Clean up invalid file
             return jsonify({'error': 'Invalid video file - file is corrupted or not a valid video format'}), 400
         
@@ -1480,7 +1517,7 @@ def download_from_url():
         
         job_id = str(uuid.uuid4())
         
-        # Output path ကို အရင်သတ်မှတ်မယ်
+        # Output path
         if file_type == 'mp3':
             output_filename = f"{job_id}.mp3"
             output_path = os.path.join(app.config['AUDIO_FOLDER'], output_filename)
@@ -1488,8 +1525,40 @@ def download_from_url():
             output_filename = f"{job_id}.mp4"
             output_path = os.path.join(app.config['UPLOAD_FOLDER'], output_filename)
         
-        # Build yt-dlp command with proper format specifications
-        cmd = [
+        # Initialize job
+        active_jobs[job_id] = {
+            'id': job_id,
+            'user_id': current_user.id,
+            'filename': os.path.basename(url),
+            'status': 'processing',
+            'progress': 0,
+            'created_at': time.time()
+        }
+        
+        # Start processing in background
+        thread = threading.Thread(
+            target=download_video_task,
+            args=(job_id, url, quality, file_type, output_path, current_user.id)
+        )
+        thread.daemon = True
+        thread.start()
+        
+        # Track the thread
+        active_tasks[job_id] = {
+            'thread': thread,
+            'cancelled': False,
+            'type': 'download'
+        }
+        
+        return jsonify({
+            'message': 'Download started',
+            'job_id': job_id,
+            'url': url
+        })
+        
+    except Exception as e:
+        logger.error(f"Download error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
             'yt-dlp',
             '--no-playlist',
             '--no-warnings',
