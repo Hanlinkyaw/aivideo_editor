@@ -28,8 +28,14 @@ __pycache__/
 ehthumbs.db
 Thumbs.db
 
+# Environment / Secrets
+.env
+.env.local
+cookies.txt
+
 # Project specific
 uploads/*.mp4
 outputs/*.mp4
 users.db
 *.db
+data/

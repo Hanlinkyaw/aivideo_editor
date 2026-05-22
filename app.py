@@ -15,7 +15,6 @@ import sqlite3
 import json
 import subprocess
 import tempfile
-import subprocess
 import re
 import signal
 import asyncio
@@ -123,56 +122,16 @@ login_manager.init_app(app)
 login_manager.login_view = 'login'
 
 # Database setup
-def init_db():
-    # Ensure data directory exists
-    os.makedirs('/app/data', exist_ok=True)
-    conn = sqlite3.connect('/app/data/users.db')
-    c = conn.cursor()
-    
-    # Create users table if not exists
-    c.execute('''
-    CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE NOT NULL,
-        email TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-    ''')
-    
-    # Create transcripts table if not exists
-    c.execute('''
-    CREATE TABLE IF NOT EXISTS transcripts (
-        id TEXT PRIMARY KEY,
-        user_id INTEGER NOT NULL,
-        filename TEXT NOT NULL,
-        content TEXT NOT NULL,
-        language TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users (id)
-    )
-    ''')
-    
-    # Create jobs table if not exists
-    c.execute('''
-    CREATE TABLE IF NOT EXISTS jobs (
-        id TEXT PRIMARY KEY,
-        user_id INTEGER NOT NULL,
-        filename TEXT NOT NULL,
-        status TEXT NOT NULL,
-        progress INTEGER DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users (id)
-    )
-    ''')
-                  created_at TIMESTAMP,
-                  FOREIGN KEY (user_id) REFERENCES users (id))''')
-    conn.commit()
-    conn.close()
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'users.db')
+if os.path.exists('/app'):
+    DB_PATH = '/app/data/users.db'
 
-# Database setup
+def get_db_path():
+    return DB_PATH
+
 def init_db():
-    conn = sqlite3.connect('/app/data/users.db')
+    os.makedirs(os.path.dirname(get_db_path()), exist_ok=True)
+    conn = sqlite3.connect(get_db_path())
     c = conn.cursor()
     
     # Users table
@@ -235,7 +194,7 @@ class User(UserMixin):
 
 @login_manager.user_loader
 def load_user(user_id):
-    conn = sqlite3.connect('/app/data/users.db')
+    conn = sqlite3.connect(get_db_path())
     c = conn.cursor()
     c.execute("SELECT * FROM users WHERE id = ?", (user_id,))
     user = c.fetchone()
@@ -888,7 +847,7 @@ def process_video_task(job_id, input_path, options, user_id):
         active_jobs[job_id]['output_file'] = output_filename
         active_jobs[job_id]['output_path'] = output_path
         
-        conn = sqlite3.connect('/app/data/users.db')
+        conn = sqlite3.connect(get_db_path())
         c = conn.cursor()
         c.execute("INSERT INTO jobs (id, user_id, filename, type, status, created_at, output_path) VALUES (?, ?, ?, ?, ?, ?, ?)",
                  (job_id, user_id, os.path.basename(input_path), 'video', 'completed', datetime.now(), output_path))
@@ -943,7 +902,7 @@ def generate_voice():
         
         # Save transcript to database
         transcript_id = str(uuid.uuid4())
-        conn = sqlite3.connect('/app/data/users.db')
+        conn = sqlite3.connect(get_db_path())
         c = conn.cursor()
         c.execute("INSERT INTO transcripts (id, user_id, filename, content, language, created_at) VALUES (?, ?, ?, ?, ?, ?)",
                  (transcript_id, current_user.id, 'YouTube Transcript', text, 'my', datetime.now()))
@@ -978,7 +937,7 @@ def get_audio(filename):
 @login_required
 def list_transcripts():
     """List user's transcripts"""
-    conn = sqlite3.connect('/app/data/users.db')
+    conn = sqlite3.connect(get_db_path())
     c = conn.cursor()
     c.execute("SELECT id, filename, content, language, created_at FROM transcripts WHERE user_id = ? ORDER BY created_at DESC LIMIT 20",
               (current_user.id,))
@@ -997,7 +956,7 @@ def list_transcripts():
 @login_required
 def get_transcript(transcript_id):
     """Get full transcript"""
-    conn = sqlite3.connect('/app/data/users.db')
+    conn = sqlite3.connect(get_db_path())
     c = conn.cursor()
     c.execute("SELECT content FROM transcripts WHERE id = ? AND user_id = ?",
               (transcript_id, current_user.id))
@@ -1014,7 +973,7 @@ def get_transcript(transcript_id):
 @login_required
 def list_voices():
     """List user's generated voices"""
-    conn = sqlite3.connect('/app/data/users.db')
+    conn = sqlite3.connect(get_db_path())
     c = conn.cursor()
     c.execute("SELECT id, text, language, created_at FROM voices WHERE user_id = ? ORDER BY created_at DESC LIMIT 20",
               (current_user.id,))
@@ -1100,44 +1059,7 @@ def upload_file():
         
         # Validate video file
         if not validate_video_file(file_path):
-            return jsonify({'error': 'Invalid video file'}), 400
-        
-        # Initialize job
-        active_jobs[job_id] = {
-            'id': job_id,
-            'user_id': current_user.id,
-            'filename': filename,
-            'input_path': file_path,
-            'status': 'processing',
-            'progress': 0,
-            'created_at': time.time()
-        }
-        
-        # Start processing in background
-        thread = threading.Thread(
-            target=process_video_task,
-            args=(job_id, file_path, {}, current_user.id)
-        )
-        thread.daemon = True
-        thread.start()
-        
-        # Track the thread
-        active_tasks[job_id] = {
-            'thread': thread,
-            'cancelled': False,
-            'type': 'video'
-        }
-        
-        return jsonify({
-            'message': 'Upload successful',
-            'job_id': job_id,
-            'filename': filename
-        })
-        
-    except Exception as e:
-        logger.error(f"Upload error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-            os.remove(file_path)  # Clean up invalid file
+            os.remove(file_path)
             return jsonify({'error': 'Invalid video file - file is corrupted or not a valid video format'}), 400
         
         # Get options from form
@@ -1179,7 +1101,7 @@ def upload_file():
             
             'text_enabled': request.form.get('text_enabled', 'off'),
             'text_content': request.form.get('text_content', ''),
-            'text_font': request.form.get('text_font', '/System/Library/Fonts/Supplemental/MyanmarSangamMN.ttc'),
+            'text_font': request.form.get('text_font', ''),
             'text_size': request.form.get('text_size', '40'),
             'text_color': request.form.get('text_color', 'white'),
             'text_position': request.form.get('text_position', 'center'),
@@ -1215,18 +1137,19 @@ def upload_file():
         )
         thread.start()
         
-        # Initialize task tracking with thread reference
+        # Track the thread
         active_tasks[job_id] = {
             'cancelled': False,
             'thread': thread,
-            'pid': None  # No PID for Python thread
+            'type': 'video'
         }
         
         logger.info(f"Job {job_id} queued for user {current_user.id}")
         
         return jsonify({
             'job_id': job_id,
-            'message': 'Video uploaded successfully'
+            'message': 'Video uploaded successfully',
+            'filename': filename
         })
         
     except Exception as e:
@@ -1325,7 +1248,7 @@ def register():
         hashed_password = generate_password_hash(password)
         
         try:
-            conn = sqlite3.connect('/app/data/users.db')
+            conn = sqlite3.connect(get_db_path())
             c = conn.cursor()
             c.execute("INSERT INTO users (username, password, email, created_at) VALUES (?, ?, ?, ?)",
                      (username, hashed_password, email, datetime.now()))
@@ -1344,7 +1267,7 @@ def login():
         username = request.form.get('username')
         password = request.form.get('password')
         
-        conn = sqlite3.connect('/app/data/users.db')
+        conn = sqlite3.connect(get_db_path())
         c = conn.cursor()
         c.execute("SELECT * FROM users WHERE username = ?", (username,))
         user = c.fetchone()
@@ -1443,7 +1366,7 @@ def clone_voice():
         
         # Save to database
         voice_id = str(uuid.uuid4())
-        conn = sqlite3.connect('/app/data/users.db')
+        conn = sqlite3.connect(get_db_path())
         c = conn.cursor()
         c.execute("INSERT INTO voices (id, user_id, text, audio_path, language, created_at) VALUES (?, ?, ?, ?, ?, ?)",
                  (voice_id, current_user.id, text[:100], output_path, 'my', datetime.now()))
@@ -1474,10 +1397,6 @@ def clone_status(job_id):
 
 # ==================== YOUTUBE/TIKTOK DOWNLOADER ====================
 
-import subprocess
-import re
-from urllib.parse import urlparse
-
 def validate_url(url):
     """Check if URL is valid and supported"""
     supported_domains = [
@@ -1506,12 +1425,11 @@ def download_from_url():
         
         url = request.form.get('url', '')
         quality = request.form.get('quality', '720p')
-        file_type = request.form.get('file_type', 'mp4')  # mp4 or mp3
+        file_type = request.form.get('file_type', 'mp4')
         
         if not url:
             return jsonify({'error': 'No URL provided'}), 400
         
-        # Validate URL
         if not validate_url(url):
             return jsonify({'error': 'Unsupported URL. Please use YouTube, Facebook, or TikTok URLs'}), 400
         
@@ -1519,46 +1437,12 @@ def download_from_url():
         
         # Output path
         if file_type == 'mp3':
-            output_filename = f"{job_id}.mp3"
-            output_path = os.path.join(app.config['AUDIO_FOLDER'], output_filename)
+            output_path = os.path.join(app.config['AUDIO_FOLDER'], f"{job_id}.mp3")
         else:
-            output_filename = f"{job_id}.mp4"
-            output_path = os.path.join(app.config['UPLOAD_FOLDER'], output_filename)
+            output_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{job_id}.mp4")
         
-        # Initialize job
-        active_jobs[job_id] = {
-            'id': job_id,
-            'user_id': current_user.id,
-            'filename': os.path.basename(url),
-            'status': 'processing',
-            'progress': 0,
-            'created_at': time.time()
-        }
-        
-        # Start processing in background
-        thread = threading.Thread(
-            target=download_video_task,
-            args=(job_id, url, quality, file_type, output_path, current_user.id)
-        )
-        thread.daemon = True
-        thread.start()
-        
-        # Track the thread
-        active_tasks[job_id] = {
-            'thread': thread,
-            'cancelled': False,
-            'type': 'download'
-        }
-        
-        return jsonify({
-            'message': 'Download started',
-            'job_id': job_id,
-            'url': url
-        })
-        
-    except Exception as e:
-        logger.error(f"Download error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        # Build yt-dlp command
+        cmd = [
             'yt-dlp',
             '--no-playlist',
             '--no-warnings',
@@ -1567,17 +1451,15 @@ def download_from_url():
         ]
         
         if file_type == 'mp3':
-            # Audio only - force MP3
             cmd.extend([
                 '-f', 'bestaudio/best',
-                '-x',  # Extract audio
+                '-x',
                 '--audio-format', 'mp3',
-                '--audio-quality', '0',  # Best quality
+                '--audio-quality', '0',
                 '--postprocessor-args', '-acodec mp3',
-                '-o', output_path  # Direct output path with .mp3 extension
+                '-o', output_path
             ])
         else:
-            # Video with audio - force MP4
             if quality == '1080p':
                 format_spec = 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best'
             elif quality == '720p':
@@ -1590,7 +1472,7 @@ def download_from_url():
             cmd.extend([
                 '-f', format_spec,
                 '--merge-output-format', 'mp4',
-                '-o', output_path  # Direct output path with .mp4 extension
+                '-o', output_path
             ])
         
         cmd.append(url)
@@ -1618,9 +1500,16 @@ def download_from_url():
         )
         thread.start()
         
+        active_tasks[job_id] = {
+            'thread': thread,
+            'cancelled': False,
+            'type': 'download'
+        }
+        
         return jsonify({
             'job_id': job_id,
-            'message': 'Download started'
+            'message': 'Download started',
+            'url': url
         })
         
     except Exception as e:
@@ -1658,7 +1547,7 @@ def run_download_task_v2(job_id, cmd, output_path, file_type, user_id, url):
                     raise Exception("Downloaded file not found")
             
             # Save to database
-            conn = sqlite3.connect('/app/data/users.db')
+            conn = sqlite3.connect(get_db_path())
             c = conn.cursor()
             c.execute("""INSERT INTO jobs 
                        (id, user_id, filename, type, status, created_at, output_path) 
@@ -1989,7 +1878,7 @@ def voice_clone_panel():
             
             # Save to database
             voice_id = str(uuid.uuid4())
-            conn = sqlite3.connect('/app/data/users.db')
+            conn = sqlite3.connect(get_db_path())
             c = conn.cursor()
             c.execute("""INSERT INTO voices 
                          (id, user_id, text, audio_path, language, created_at) 
